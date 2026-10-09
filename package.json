@@ -1,0 +1,40 @@
+{
+  "name": "onyx",
+  "productName": "Onyx",
+  "version": "2.2.0",
+  "description": "Onyx — Smart File Organizer",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win --x64"
+  },
+  "devDependencies": {
+    "electron": "32.3.3",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.onyx.organizer",
+    "productName": "Onyx",
+    "win": {
+      "target": "dir",
+      "icon": "icon.ico"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "engine.js",
+      "renderer.js",
+      "graph.js",
+      "icons.js",
+      "theme.js",
+      "settings.js",
+      "workspace.js",
+      "index.html",
+      "styles.css",
+      "icon.ico",
+      "onyx-stone.ico",
+      "icon.png",
+      "package.json"
+    ]
+  }
+}

@@ -1,0 +1,26 @@
+const { contextBridge, ipcRenderer, webFrame, webUtils } = require('electron');
+
+contextBridge.exposeInMainWorld('onyx', {
+  platform: process.platform,
+  pickFolder: () => ipcRenderer.invoke('pick-folder'),
+  openRecent: (p) => ipcRenderer.invoke('open-recent', p),
+  openPath: (p) => ipcRenderer.invoke('open-path', p),
+  pathForFile: (file) => { try { return webUtils.getPathForFile(file); } catch { return ''; } },
+  loadDemo: () => ipcRenderer.invoke('load-demo'),
+  rescan: () => ipcRenderer.invoke('rescan'),
+  organize: (strategy) => ipcRenderer.invoke('organize', strategy),
+  apply: (items) => ipcRenderer.invoke('apply-plan', items),
+  undo: () => ipcRenderer.invoke('undo'),
+  getSettings: () => ipcRenderer.invoke('get-settings'),
+  saveSettings: (patch) => ipcRenderer.invoke('save-settings', patch),
+  replaceSetting: (section, key, value) => ipcRenderer.invoke('replace-settings', { section, key, value }),
+  resetSettings: (which) => ipcRenderer.invoke('reset-settings', which),
+  exportSettings: () => ipcRenderer.invoke('export-settings'),
+  importSettings: () => ipcRenderer.invoke('import-settings'),
+  testAi: () => ipcRenderer.invoke('test-ai'),
+  reveal: (rel) => ipcRenderer.invoke('reveal', rel),
+  copyText: (t) => ipcRenderer.invoke('copy-text', t),
+  setTitleBar: (c) => ipcRenderer.invoke('set-titlebar', c),
+  setZoom: (z) => { try { webFrame.setZoomFactor(z); } catch { /* ignore */ } },
+  onProgress: (cb) => ipcRenderer.on('organize-progress', (e, p) => cb(p)),
+});

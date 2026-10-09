@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Onyx</title>
+<link rel="icon" href="icon.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app">
+  <aside class="ribbon">
+    <div class="ribbon-top drag">
+      <button class="clickable-icon" data-action="toggle-left" data-tip="Toggle left sidebar" data-cmd="toggle-left" data-icon="panel-left"></button>
+    </div>
+    <div class="ribbon-actions">
+      <button class="clickable-icon" data-action="open-folder" data-tip="Open folder as vault" data-cmd="open-folder" data-icon="folder-open"></button>
+      <button class="clickable-icon" data-action="organize" data-tip="Organize" data-cmd="organize" data-icon="sparkles"></button>
+      <button class="clickable-icon" data-action="view-graph" data-tip="Open graph view" data-cmd="view-graph" data-icon="git-fork"></button>
+      <button class="clickable-icon" data-action="palette" data-tip="Open command palette" data-cmd="palette" data-icon="terminal-square"></button>
+      <button class="clickable-icon" data-action="undo" id="ribbonUndo" data-tip="Undo last organize" data-cmd="undo" data-icon="undo-2"></button>
+    </div>
+    <div class="ribbon-bottom">
+      <button class="clickable-icon" data-action="demo" data-tip="Open demo vault" data-icon="flask-conical"></button>
+      <button class="clickable-icon" data-action="layout-menu" data-tip="Layout" data-icon="layout-dashboard"></button>
+      <button class="clickable-icon" data-action="settings-appearance" data-tip="Appearance" data-icon="palette"></button>
+      <button class="clickable-icon" data-action="settings" data-tip="Settings" data-cmd="settings" data-icon="settings"></button>
+    </div>
+  </aside>
+
+  <aside class="dock" id="dock-left" data-region="left"></aside>
+  <div class="resize-handle left" data-side="left"></div>
+  <main class="workspace"><div class="main-panes" id="mainPanes"></div></main>
+  <div class="resize-handle right" data-side="right"></div>
+  <aside class="dock" id="dock-right" data-region="right"></aside>
+</div>
+
+<!-- views live here when they aren't shown; the layout moves them into docks and panes -->
+<div id="viewStore" hidden>
+  <section class="view-root" data-view="files">
+    <div class="nav-header">
+      <button class="clickable-icon" data-action="open-folder" data-tip="Open folder" data-icon="folder-plus"></button>
+      <button class="clickable-icon" data-action="toggle-search" data-tip="Search files" data-cmd="search-files" data-icon="search"></button>
+      <button class="clickable-icon" data-action="rescan" data-tip="Reload from disk" data-cmd="rescan" data-icon="refresh-cw"></button>
+      <button class="clickable-icon" data-action="collapse-explorer" data-tip="Collapse all" data-icon="chevrons-down-up"></button>
+      <button class="clickable-icon" data-action="reveal-root" data-tip="Show in system explorer" data-icon="external-link"></button>
+    </div>
+    <div class="nav-search" id="navSearch">
+      <div class="search-wrap"><span data-icon="search" data-size="xs"></span><input class="search-input" id="explorerFilter" placeholder="Filter files…" aria-label="Filter files" spellcheck="false"></div>
+    </div>
+    <div class="nav-files tree" id="explorer" tabindex="0" role="tree" aria-label="Files"></div>
+    <div class="vault-profile">
+      <button class="vault-switcher" data-action="vault-menu" id="vaultSwitcher"><img src="icon.png" alt=""><span class="name">No vault</span><span data-icon="chevrons-up-down" data-size="xs"></span></button>
+      <button class="clickable-icon" data-action="help" data-tip="Help" data-cmd="help" data-icon="help-circle"></button>
+      <button class="clickable-icon" data-action="settings" data-tip="Settings" data-icon="settings"></button>
+    </div>
+  </section>
+  <section class="view-root" data-view="organize"><div class="side-content" id="side"></div></section>
+  <section class="view-root" data-view="structure"><div class="view-header"><div class="view-header-title" data-title></div><div class="view-actions" data-actions></div></div><div class="view-content" id="vs-structure"></div></section>
+  <section class="view-root" data-view="changes"><div class="view-header"><div class="view-header-title" data-title></div><div class="view-actions" data-actions></div></div><div class="view-content" id="vs-changes"></div></section>
+  <section class="view-root" data-view="graph"><div class="view-header"><div class="view-header-title" data-title></div><div class="view-actions" data-actions></div></div><div class="view-content" id="vs-graph"></div></section>
+</div>
+
+<div class="status-bar" id="statusBar"></div>
+<div class="notice-container" id="notices"></div>
+<div class="tooltip" id="tooltip" role="tooltip"></div>
+<div class="drop-overlay" id="dropOverlay"><div class="box"><img src="icon.png" alt="">Drop a folder to open it<span>Onyx will scan it; nothing moves until you apply a plan.</span></div></div>
+<div class="dock-edge left" data-edge="left">Dock left</div>
+<div class="dock-edge right" data-edge="right">Dock right</div>
+<div class="drop-indicator" id="dropIndicator"></div>
+
+<script src="engine.js"></script>
+<script src="icons.js"></script>
+<script src="theme.js"></script>
+<script src="graph.js"></script>
+<script src="settings.js"></script>
+<script src="workspace.js"></script>
+<script src="renderer.js"></script>
+</body>
+</html>
