@@ -106,6 +106,32 @@ db = TG.emptyDb();
 TG.applyAuto(db, { 'old.pdf': ['t'] }, 'ai'); db.files['old.pdf'].ai = 5;
 eq(TG.aiOrder(db, [{ path: 'old.pdf' }, { path: 'new.pdf' }]).map(x => x.path), ['new.pdf', 'old.pdf'], 're-tag all goes oldest first');
 
+// ---- real-world noise: no tags from URL-ish names, code parts, or files in different folders
+const F2 = (p, ext) => ({ path: p, name: p.split('/').pop(), extension: ext || p.split('.').pop().toLowerCase(), size: 1000, lastModified: now });
+const noisy = [
+  F2('https___steamcdn-a.akamaihd.net_steam_apps_1.jpg'), F2('https___steamcdn-a.akamaihd.net_steam_apps_2.jpg'),
+  F2('Copilot Files/app.js'), F2('Copilot Files/index.html'), F2('Copilot Files/variable1.svg'), F2('Copilot Files/variable2.svg'), F2('Copilot Files/enumValue1.png'), F2('Copilot Files/enumValue2.png'),
+  F2('lib/helper1.py'), F2('lib/helper2.py'),
+  F2('a/report_1.pdf'), F2('b/report_2.pdf'),
+  F2('Renders/glorp_v1.png'), F2('Renders/glorp_v2.png'), F2('Renders/glorp_v3.png'),
+];
+const nm = TG.autoTags(noisy, [{ path: 'Copilot Files' }, { path: 'lib' }, { path: 'a' }, { path: 'b' }, { path: 'Renders' }]);
+const all = new Set([].concat(...[...nm.values()]));
+ok(![...all].some(t => /http|steam|akamai|variable|enum|helper/.test(t)), 'no junk series tags: ' + [...all].join(','));
+ok((nm.get('Renders/glorp_v1.png') || []).includes('glorp'), 'real series in one folder still tagged');
+ok(!(nm.get('a/report_1.pdf') || []).some(t => t === 'report-1' || t === 'report_'), 'no series across folders');
+// rules sync removes stale rule tags but never yours or AI's
+db = TG.emptyDb();
+TG.applyAuto(db, { 'x.png': ['variable', 'screenshot'] }, 'rules');
+TG.edit(db, ['x.png'], ['mine'], []);
+TG.applyAuto(db, { 'x.png': ['ai-tag'] }, 'ai');
+TG.syncRules(db, { 'x.png': ['screenshot'] });
+eq(db.files['x.png'].t.sort(), ['ai-tag', 'mine', 'screenshot'], 'stale rule tag removed, yours and AI kept');
+// migration: entries from before rule tracking (no r, no ai) are treated as rule tags
+db = { v: 1, files: { 'y.png': { t: ['httpssteam', 'keep'], a: ['httpssteam'], x: [] } }, colors: {}, saved: [] };
+TG.syncRules(db, { 'y.png': [] });
+eq(db.files['y.png'].t, ['keep'], 'old junk auto tags cleaned on upgrade');
+
 // ---- main-process integration
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'onyx-tags-'));
 const ud = path.join(tmp, 'ud'), root = path.join(tmp, 'Downloads');

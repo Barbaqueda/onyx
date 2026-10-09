@@ -86,15 +86,30 @@
     opts = opts || {};
     const out = new Map();
     const add = (p, t) => { t = normTag(t); if (!t) return; if (!out.has(p)) out.set(p, []); const a = out.get(p); if (!a.includes(t)) a.push(t); };
-    // series: excavatorio1.obj, excavatorio2.obj -> "excavatorio"
-    const series = E.detectSeries(files.filter(f => !E.untouchableReason(f)), 2);
-    for (const g of series.values()) {
-      const t = normTag(singularLabel(g.label));
-      if (t && t.length >= 3) for (const f of g.files) add(f.path, t);
-    }
     // bundles: files inside a web project, a 3D asset folder…
     let kinds = null;
     try { kinds = E.classifyDirs(files, dirs || [], E.DEFAULTS); } catch (e) { kinds = null; }
+    const inBundle = f => {
+      if (!kinds) return false;
+      let d = E.dirname(f.path);
+      while (d) { const k = kinds.get(d.toLowerCase()); if (k && k.kind === 'bundle') return true; d = E.dirname(d); }
+      return false;
+    };
+    // series: excavatorio1.obj, excavatorio2.obj -> "excavatorio". Only real words, only side by side in one
+    // folder, and never for code, config or the parts of a project (icon1.svg, variable2.ts…)
+    const byDir = new Map();
+    for (const f of files) {
+      if (E.untouchableReason(f) || SERIES_SKIP.has(E.typeFolder(f.extension).split('/')[0]) || /^Code/.test(E.typeFolder(f.extension)) || inBundle(f)) continue;
+      const d = E.dirname(f.path).toLowerCase();
+      if (!byDir.has(d)) byDir.set(d, []);
+      byDir.get(d).push(f);
+    }
+    for (const list of byDir.values()) {
+      for (const g of E.detectSeries(list, 2).values()) {
+        const t = normTag(singularLabel(g.label));
+        if (goodSeriesTag(t)) for (const f of g.files) add(f.path, t);
+      }
+    }
     for (const f of files) {
       const group = E.typeGroup(f.extension);
       const texts = E.nameTexts(f.name);
@@ -127,6 +142,14 @@
     }
     if (opts.only) for (const p of [...out.keys()]) if (!opts.only.has(p)) out.delete(p);
     return out;
+  }
+  const SERIES_SKIP = new Set(['Code', 'Fonts', 'Shortcuts', 'Torrents', 'Subtitles', 'Other']);
+  function goodSeriesTag(t) {
+    if (!t || t.length < 3 || t.length > 24) return false;
+    if (/https?|www|\.com|cdn|akamai|^(img|dsc|vid|file|untitled|new|copy|image|photo|screenshot|document|scan)$/.test(t)) return false;
+    const letters = t.replace(/[^a-z]/g, '');
+    if (letters.length < 3 || !/[aeiouy]/.test(letters)) return false;
+    return t.split('-').every(w => w.length <= 14);
   }
   function singularLabel(label) {
     const w = String(label).split(' ');
@@ -343,7 +366,7 @@
     idx.set(p.toLowerCase(), p);
     return db.files[p];
   }
-  function tidy(e) { e.t = e.t || []; e.a = (e.a || []).filter(t => e.t.includes(t)); e.x = e.x || []; return e; }
+  function tidy(e) { e.t = e.t || []; e.a = (e.a || []).filter(t => e.t.includes(t)); e.x = e.x || []; if (e.r) e.r = e.r.filter(t => e.a.includes(t)); return e; }
   function isBare(e) { return !e.t.length && !e.x.length && !e.ai; }
 
   /**
@@ -396,6 +419,27 @@
     }
     return { db, changed, relinked };
   }
+  /**
+   * Keep rule-made tags in step with the rules: a tag the offline tagger added
+   * earlier but no longer suggests is removed (only if you never touched it).
+   * map: { path: [tags suggested now] } covering every scanned file.
+   */
+  function syncRules(db, map) {
+    db = cleanDb(db);
+    let removed = 0;
+    for (const [k, e] of Object.entries(db.files)) {
+      if (!e.r && e.a && e.a.length && !e.ai) e.r = e.a.slice();     // entries from before rules were tracked
+      if (!e.r || !e.r.length) continue;
+      const now = new Set((own(map, k) ? map[k] : []).map(normTag));
+      const stale = e.r.filter(t => !now.has(t) && (e.a || []).includes(t));
+      if (!stale.length) continue;
+      e.t = e.t.filter(t => !stale.includes(t)); e.a = e.a.filter(t => !stale.includes(t)); e.r = e.r.filter(t => !stale.includes(t));
+      removed += stale.length;
+      if (isBare(tidy(e))) delete db.files[k];
+    }
+    return removed;
+  }
+
   // after Onyx moves files: [{from, to}]
   function applyMoves(db, moves) {
     db = cleanDb(db);
@@ -455,6 +499,7 @@
         const t = normTag(raw);
         if (!t || e.t.includes(t) || e.x.includes(t) || isBlocked(t)) continue;
         e.t.push(t); e.a.push(t); added++; any = true;
+        if (source !== 'ai') { e.r = e.r || []; if (!e.r.includes(t)) e.r.push(t); }
       }
       if (source === 'ai') e.ai = Date.now();
       const f = info && info.get(p.toLowerCase());
@@ -471,6 +516,7 @@
     for (const k of keys) {
       const e = tidy(db.files[k]);
       if (!e.a.length) continue;
+      delete e.r;
       n += e.a.length;
       e.t = e.t.filter(t => !e.a.includes(t));
       for (const t of e.a) if (!e.x.includes(t)) e.x.push(t);
@@ -547,6 +593,6 @@
   return {
     normTag, tagLabel, tagFolder, hashColor, autoTags, aiTagBatches, parseAiTags, AI_TAG_SYSTEM,
     parseQuery, isEmptyQuery, matchFile, duplicateSet, tokenize, KINDS, tagMatches,
-    emptyDb, cleanDb, reconcile, applyMoves, edit, applyAuto, clearAuto, renameTag, deleteTag, view, needsAuto, aiOrder, primaryTag,
+    emptyDb, cleanDb, reconcile, applyMoves, edit, applyAuto, clearAuto, renameTag, deleteTag, view, needsAuto, aiOrder, primaryTag, syncRules,
   };
 });

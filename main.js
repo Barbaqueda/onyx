@@ -174,8 +174,9 @@ function syncTags() {
   TG.reconcile(tagDb, scan.files, { complete });
   scan.autoTagged = 0;
   if (autoTagMode() === 'rules') {
-    const m = TG.autoTags(scan.files, scan.dirs);
-    scan.autoTagged = TG.applyAuto(tagDb, Object.fromEntries(m), 'rules', scan.files).files;
+    const map = Object.fromEntries(TG.autoTags(scan.files, scan.dirs));
+    if (complete) TG.syncRules(tagDb, map);
+    scan.autoTagged = TG.applyAuto(tagDb, map, 'rules', scan.files).files;
   }
   saveTagDb();
 }
