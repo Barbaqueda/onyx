@@ -1,4 +1,4 @@
-Onyx 2.2 - source
+Onyx 2.3 - source
 =================
 
 EASIEST: double-click "Build Onyx.bat"
@@ -6,6 +6,21 @@ EASIEST: double-click "Build Onyx.bat"
   checks it, adds Onyx, and creates:
     Downloads\onyx\Onyx.exe   (+ desktop and Start menu shortcuts)
   then launches it. Run it again any time to rebuild; the download is cached.
+
+LIBRARY AND TAGS (Ctrl+L)
+  A better file explorer: every file in one searchable list or grid, with
+  thumbnails, a details panel, and tags.
+  Tags         added automatically from names (offline), by AI (one click,
+               names only), or by hand: select files and press #, or drag
+               them onto a tag. Tags live in Onyx's app-data folder; your
+               files are never changed. Tags follow files when Onyx moves them.
+  Search       #invoice  -#draft  type:pdf  kind:image  size:>100mb
+               modified:<7d  modified:2024  in:Documents  is:untagged
+               is:duplicate  "exact words"
+  Quick find   Ctrl+K from anywhere. Enter shows it, Ctrl+Enter opens it.
+  Tags panel   all tags with counts, recent, untagged, duplicates, large
+               files, kinds and your saved searches.
+  By tag       an Organize strategy: a folder for each file's main tag.
 
 MAKE IT YOURS (Settings: Ctrl+,  -  Command palette: Ctrl+P)
   Appearance   12 themes (8 dark, 4 light), light/dark/match Windows,

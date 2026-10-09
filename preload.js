@@ -23,4 +23,16 @@ contextBridge.exposeInMainWorld('onyx', {
   setTitleBar: (c) => ipcRenderer.invoke('set-titlebar', c),
   setZoom: (z) => { try { webFrame.setZoomFactor(z); } catch { /* ignore */ } },
   onProgress: (cb) => ipcRenderer.on('organize-progress', (e, p) => cb(p)),
+  // tags and the library
+  tagsEdit: (paths, add, remove) => ipcRenderer.invoke('tags-edit', { paths, add, remove }),
+  tagsRename: (from, to) => ipcRenderer.invoke('tags-rename', { from, to }),
+  tagsDelete: (name) => ipcRenderer.invoke('tags-delete', name),
+  tagsColor: (name, color) => ipcRenderer.invoke('tags-color', { name, color }),
+  tagsSaved: (list) => ipcRenderer.invoke('tags-saved', list),
+  tagsClearAuto: (paths) => ipcRenderer.invoke('tags-clear-auto', paths),
+  tagsAuto: (opts) => ipcRenderer.invoke('tags-auto', opts),
+  tagsCancel: () => ipcRenderer.invoke('tags-cancel'),
+  onTagProgress: (cb) => ipcRenderer.on('tag-progress', (e, p) => cb(p)),
+  openFile: (rel) => ipcRenderer.invoke('open-file', rel),
+  thumb: (rel, size) => ipcRenderer.invoke('file-thumb', { rel, size }),
 });

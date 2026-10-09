@@ -5,7 +5,8 @@
   const E = window.OnyxEngine;
   const T = window.OnyxTheme;
   const WS = window.OnyxWorkspace;
-  const MAIN_VIEWS = ['structure', 'changes', 'graph'];
+  const LIB = window.OnyxLibrary;
+  const MAIN_VIEWS = ['structure', 'changes', 'graph', 'library', 'tags'];
   const $ = s => document.querySelector(s);
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const isMac = api.platform === 'darwin';
@@ -22,6 +23,7 @@
     { id: 'type', name: 'By type', icon: 'layers', desc: 'Images, Documents, 3D Models, Installers…' },
     { id: 'date', name: 'By date', icon: 'calendar', desc: 'Year and month each file was last changed' },
     { id: 'size', name: 'By size', icon: 'hard-drive', desc: 'Small, medium, large and huge files' },
+    { id: 'tags', name: 'By tag', icon: 'tag', desc: 'A folder for each file’s main tag. Your own tags come first' },
     { id: 'flatten', name: 'Flatten', icon: 'arrow-up-to-line', desc: 'Pull files out of subfolders to the top level' },
   ];
 
@@ -106,6 +108,7 @@
     if (section === 'graph') { if (S.graphInst) { S.graphInst.destroy(); S.graphInst = null; } }
     if (section === 'appearance' && !['zoom', 'radius', 'readingSize', 'accent'].includes(key)) { renderAll(); return; }
     if (section === 'explorer' || section === 'layout' || section === 'graph' || section === 'hotkeys') renderAll();
+    if (section === 'library' && (key === 'treeTags' || key === 'thumbs' || key === 'details')) renderAll();
   }
   T.onSystemChange(() => applyTheme());
 
@@ -309,16 +312,26 @@
     const entries = files.map(x => ({ path: x.path, name: x.name, source: x.path, size: x.size, mtime: x.lastModified, item: plan.get(x.path) }));
     const dirs = f ? [] : S.vault.dirs.map(d => ({ path: d.path, data: { opaque: d.opaque } }));
     const kinds = kindsMap();
+    const treeTags = UI().library.treeTags !== false;
     const html = treeHTML(buildTree(entries, dirs), {
       id: 'explorer',
       isOpen: n => !!f || S.explorerOpen.has(n.path),
       folderFlair: n => n.data.opaque ? '<span class="pill muted">not scanned</span>' : bundlePill(n.path, kinds),
       folderClass: n => n.data.opaque ? 'mod-faint' : '',
       fileClass: e => (S.selected === e.source ? 'is-active' : '') + (e.item && e.item.skip ? ' mod-skipped' : ''),
-      fileFlair: e => (ex.sizes ? '<span>' + fmt(e.size) + '</span>' : '') + (ex.moveDots && e.item && isMoving(e.item) ? '<span class="move-dot"></span>' : ''),
-      fileTip: e => e.item && isMoving(e.item) ? 'Moves to ' + (dirname(e.item.target) || 'top level') + '/' : '',
+      fileFlair: e => (treeTags ? tagDots(e.source) : '') + (ex.sizes ? '<span>' + fmt(e.size) + '</span>' : '') + (ex.moveDots && e.item && isMoving(e.item) ? '<span class="move-dot"></span>' : ''),
+      fileTip: e => {
+        const t = treeTags ? LIB.tagsOf(e.source) : [];
+        return [e.item && isMoving(e.item) ? 'Moves to ' + (dirname(e.item.target) || 'top level') + '/' : '', t.length ? t.map(x => '#' + x).join('  ') : ''].filter(Boolean).join('\n');
+      },
     });
     el.innerHTML = html || '<div class="nav-empty">' + (f ? 'No files match “' + esc(S.explorerFilter) + '”.' : 'This folder is empty.') + '</div>';
+  }
+
+  function tagDots(p) {
+    const t = LIB.tagsOf(p);
+    if (!t.length) return '';
+    return '<span class="tree-tags">' + t.slice(0, 3).map(x => '<span style="background:' + LIB.tagColor(x) + '"></span>').join('') + '</span>';
   }
 
   // ======================================================================= main views
@@ -332,10 +345,12 @@
     const root = document.querySelector('.view-root[data-view="' + v + '"]');
     if (!root) return;
     const name = v === 'structure' ? (S.plan ? 'Proposed structure' : 'Overview') : WS.VIEWS[v].name;
+    if (!root.querySelector('[data-title]')) return;
     root.querySelector('[data-title]').innerHTML = S.vault ? '<span class="crumb">' + esc(S.vault.vaultName) + '</span><span class="sep">/</span>' + esc(name) : esc(name);
     let actions = '';
     if (v === 'structure' && S.plan) actions = btnIcon('expand-proposed', 'chevrons-up-down', 'Expand all') + btnIcon('collapse-proposed', 'chevrons-down-up', 'Collapse all');
     if (v === 'graph' && S.vault) actions = btnIcon('graph-fit', 'crosshair', 'Fit to view');
+    if (v === 'library' && S.vault) actions = btnIcon('lib-autotag', 'sparkles', 'Tag automatically') + btnIcon('quick-find', 'search', 'Quick find');
     root.querySelector('[data-actions]').innerHTML = actions;
   }
   function renderTabs() {
@@ -353,6 +368,8 @@
   function renderOne(v) {
     viewHeader(v);
     const el = $('#vs-' + v);
+    if (v === 'library') { LIB.renderLibrary(el); return; }
+    if (v === 'tags') { LIB.renderTagsPanel(el); return; }
     el.classList.toggle('busy', S.busy);
     if (v === 'structure') { const y = el.scrollTop; el.innerHTML = S.vault ? structureHTML() : emptyStateHTML(); el.scrollTop = y; return; }
     if (!S.vault) {
@@ -890,6 +907,12 @@
     if (r.error) { modal({ title: 'Can’t open this folder', html: '<p>' + esc(r.error) + '</p>', buttons: [{ label: 'OK', cls: 'mod-cta' }] }); return; }
     setVault(r); await loadSettings(); renderAll();
     if (!quiet) notice('Opened <b>' + esc(r.vaultName) + '</b> · ' + plural(r.files.length, 'file'), 'success');
+    autoTagNotice(r);
+  }
+  function autoTagNotice(r) {
+    if (!r || !r.autoTagged) return;
+    setTimeout(() => notice('Tagged <b>' + plural(r.autoTagged, 'file') + '</b> from their names, like #invoice or #screenshot.', 'success', 7000,
+      { label: 'Open Library', run: () => LIB.showLibrary() }), 600);
   }
   async function openFolder() { afterOpen(await api.pickFolder()); }
   async function openRecent(p, quiet) { const r = await api.openRecent(p); if (r.error) { if (!quiet) notice(esc(r.error), 'error'); return; } afterOpen(r, quiet); }
@@ -900,6 +923,7 @@
     const keepSel = S.selected;
     S.vault = r; S.plan = null; S.selected = keepSel;
     renderAll(); notice('Reloaded from disk');
+    autoTagNotice(r);
   }
   async function organize(strategy) {
     if (strategy) setStrategy(strategy);
@@ -1012,6 +1036,19 @@
     { id: 'view-graph', name: 'View: Graph view', hk: 'Mod+G', run: () => WS.activate('graph') },
     { id: 'view-files', name: 'View: Files', hk: 'Mod+Shift+E', run: () => { WS.activate('files'); focusTree($('#explorer')); } },
     { id: 'view-organize', name: 'View: Organize panel', run: () => WS.activate('organize') },
+    { id: 'view-library', name: 'View: Library', hk: 'Mod+L', run: () => LIB.showLibrary() },
+    { id: 'view-tags', name: 'View: Tags panel', run: () => WS.activate('tags') },
+    { id: 'quick-find', name: 'Files: Quick find', hk: 'Mod+K', run: () => LIB.quickFind() },
+    { id: 'library-search', name: 'Library: Search', hk: 'Mod+F', run: () => LIB.focusSearch() },
+    { id: 'library-toggle-view', name: 'Library: Switch between list and grid', run: () => { LIB.showLibrary(); LIB.toggleView(); } },
+    { id: 'save-search', name: 'Library: Save current search', run: () => { if (!LIB.query.trim()) { notice('Search for something in the Library first', 'warn', 2500); return; } LIB.saveSearch(); } },
+    { id: 'tag-selected', name: 'Tags: Tag the selected files', hk: 'Mod+T', run: () => LIB.tagEditor() },
+    { id: 'autotag-ai', name: 'Tags: Tag untagged files with AI', run: () => LIB.autoTag('ai', { scope: 'untagged' }) },
+    { id: 'autotag-rules', name: 'Tags: Suggest tags from names (offline)', run: () => LIB.autoTag('rules', { scope: 'all' }) },
+    { id: 'clear-auto', name: 'Tags: Remove all automatic tags', run: () => confirmModal('Remove automatic tags?', '<p>Removes every tag Onyx or AI added. Tags you added yourself stay.</p>', 'Remove', () => LIB.clearAuto(null), true) },
+    { id: 'show-untagged', name: 'Library: Show untagged files', run: () => LIB.setQuery('is:untagged') },
+    { id: 'show-duplicates', name: 'Library: Show duplicates', run: () => LIB.setQuery('is:duplicate') },
+    { id: 'show-recent', name: 'Library: Show recently changed files', run: () => LIB.setQuery('modified:<7d') },
     ...Object.entries(WS.PRESETS).map(([id, p]) => ({ id: 'layout-' + id, name: 'Layout: ' + p.name + ' (' + p.desc.toLowerCase() + ')', run: () => WS.applyPreset(id) })),
     { id: 'undo', name: 'History: Undo last organize', hk: 'Mod+Z', run: () => confirmUndo() },
     { id: 'rescan', name: 'Files: Reload folder from disk', hk: 'Mod+R', run: rescan },
@@ -1034,6 +1071,7 @@
     { id: 'settings-appearance', name: 'Settings: Appearance', run: () => openSettings('appearance') },
     { id: 'settings-rules', name: 'Settings: My rules', run: () => openSettings('rules') },
     { id: 'settings-hotkeys', name: 'Settings: Hotkeys', run: () => openSettings('hotkeys') },
+    { id: 'settings-library', name: 'Settings: Library and tags', run: () => openSettings('library') },
     { id: 'add-rule', name: 'Rules: Add a rule', run: () => window.OnyxSettings.ruleEditor(ctx, {}) },
     { id: 'new-theme', name: 'Appearance: Build a color scheme', run: () => window.OnyxSettings.themeEditor(ctx) },
     { id: 'help', name: 'Help: How Onyx works', hk: 'F1', run: () => openHelp() },
@@ -1141,6 +1179,9 @@
     'reveal-root': () => runCommand('reveal-root'),
     'vault-menu': (el) => vaultMenu(el), 'theme-menu': (el) => themeMenu(el),
     'view-structure': () => WS.activate('structure'), 'view-changes': () => WS.activate('changes'), 'view-graph': () => WS.activate('graph'),
+    'view-library': () => LIB.showLibrary(), 'quick-find': () => LIB.quickFind(), 'lib-autotag': (el) => LIB.autoTagMenu(el),
+    'lib-ai-untagged': () => LIB.autoTag('ai', { scope: 'untagged' }),
+    'lib-clear-auto': () => runCommand('clear-auto'),
     'set-strategy': (el) => setStrategy(el.dataset.id),
     'open-recent': (el) => openRecent(el.dataset.path),
     'expand-proposed': () => { if (!S.plan) return; for (const it of S.plan.items) openAncestors(S.proposedOpen, effTarget(it)); renderOne('structure'); },
@@ -1212,6 +1253,11 @@
     COMMANDS, effectiveHotkey, hotkeyLabel, comboFromEvent, fuzzy, WS, showMenu, textPrompt,
   };
   function openSettings(tab) { window.OnyxSettings.open(ctx, tab); }
+  LIB.init({
+    get S() { return S; }, api, E, T, WS, UI, setUi, modal, notice, esc, icon, confirmModal, textPrompt, showMenu, fuzzy, collator, fmt, isMac,
+    emptyState: () => emptyStateHTML(),
+    renderExplorer: () => renderExplorer(), renderAll: () => renderAll(), select: (p, from) => select(p, from), openSettings: (t) => openSettings(t),
+  });
   function openHelp() {
     const k = id => '<kbd>' + esc(hotkeyLabel(effectiveHotkey(id)) || '—') + '</kbd>';
     modal({
@@ -1220,6 +1266,7 @@
         '<p style="margin-top:8px"><b>2. Organize.</b> Onyx looks at the loose files at the top level and proposes folders. <b>AI smart</b> asks a language model using only file names; <b>Smart rules</b> works offline. Your own rules always win.</p>' +
         '<p style="margin-top:8px"><b>3. Review.</b> Hover a file to see why it’s going there. Right-click to move it elsewhere, rename a new folder, keep it in place, or turn it into a rule.</p>' +
         '<p style="margin-top:8px"><b>4. Apply.</b> Files move, nothing is overwritten, and <b>Undo</b> puts everything back.</p>' +
+        '<p style="margin-top:8px"><b>Every day: the Library.</b> Search every file, filter by <code>#tag</code>, type, size or date, and tag files by hand or with AI. ' + k('quick-find') + ' finds any file in a second; select files and press <kbd>#</kbd> to tag them.</p>' +
         '<p style="margin-top:14px" class="muted">Command palette ' + k('palette') + ' · Settings ' + k('settings') + ' · Light/dark ' + k('toggle-mode') + '</p>',
       buttons: [{ label: 'Open settings', action: () => { setTimeout(() => openSettings(), 0); } }, { label: 'Got it', cls: 'mod-cta' }],
     });
@@ -1315,5 +1362,9 @@
     renderAll();
     const recent = S.settings.ui.recent || [];
     if (UI().layout.reopenLast && recent[0]) openRecent(recent[0], true);
+    if (!store.get('seenLibrary', false)) {
+      store.set('seenLibrary', true);
+      setTimeout(() => notice('<b>New: Library and tags.</b> Search everything, tag files, and find them again with ' + esc(hotkeyLabel(effectiveHotkey('quick-find'))) + '.', '', 9000, { label: 'Open Library', run: () => LIB.showLibrary() }), 1200);
+    }
   })();
 })();

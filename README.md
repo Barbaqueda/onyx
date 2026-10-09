@@ -13,6 +13,7 @@
 <p align="center">
   <a href="#-get-it"><b>Get it</b></a> &nbsp;·&nbsp;
   <a href="#-how-it-works"><b>How it works</b></a> &nbsp;·&nbsp;
+  <a href="#-library--tags"><b>Library &amp; tags</b></a> &nbsp;·&nbsp;
   <a href="#-features"><b>Features</b></a> &nbsp;·&nbsp;
   <a href="#-make-it-yours"><b>Make it yours</b></a> &nbsp;·&nbsp;
   <a href="#-shortcuts"><b>Shortcuts</b></a> &nbsp;·&nbsp;
@@ -23,6 +24,8 @@
 <br>
 
 Your Downloads folder is a mess, and every tool that promises to fix it either dumps everything into `Images/` and `Documents/` or moves things without asking. **Onyx is different.** It reads names and the folders you already have, and it plans a structure that makes sense. Nothing on disk moves until you've seen every change and said yes. And if you change your mind, one click puts everything back.
+
+Once things are tidy, Onyx stays useful as **a better file explorer**: every file searchable in one box, tagged by hand or by AI, with previews, saved searches, and a <kbd>Ctrl</kbd> <kbd>K</kbd> quick find that gets you to any file in a second.
 
 <p align="center">
   <img src="docs/hero.png" alt="Onyx showing a proposed folder structure next to a graph of the result" width="100%">
@@ -81,6 +84,59 @@ flowchart LR
 
 <br>
 
+## 🏷 Library &amp; tags
+
+Windows Explorer shows you folders. The **Library** shows you *everything at once* and lets you narrow it down in a keystroke: type a name, click a tag, or combine filters like `#invoice type:pdf modified:2024`.
+
+<p align="center">
+  <img src="docs/library.png" alt="The Library: every file with its tags, folder, date and size, the Tags panel on the left, and a preview with editable tags on the right" width="100%">
+</p>
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+### Tag anything, three ways
+- **Automatically, offline.** When a folder opens, Onyx tags new files from their names: `#invoice`, `#tax`, `#screenshot`, `#2024`, a shared tag for a series like `excavatorio1/2/3`, `#website` for an HTML project, `#incomplete` for a half-finished download.
+- **With AI.** One click and AI reads the names (never the contents) and adds 1 to 4 tags about topic, project or purpose, like `#iceland-trip` or `#project-atlas`. It reuses your existing tags so the same idea always gets the same tag.
+- **By hand.** Select files and press <kbd>#</kbd>, type in the details panel, or drag files onto a tag in the Tags panel.
+
+Tags you remove never come back, automatic tags are shown dashed so you can tell them apart, and nested tags like `school/math` just work.
+
+</td>
+<td width="50%" valign="top">
+
+### Find it again
+- **Quick find** (<kbd>Ctrl</kbd> <kbd>K</kbd>): fuzzy search by name, path or tag, from anywhere. Enter shows the file, <kbd>Ctrl</kbd> <kbd>Enter</kbd> opens it, <kbd>Shift</kbd> <kbd>Enter</kbd> shows it in its folder.
+- **The Tags panel**: every tag with its count, plus *Changed this week*, *Untagged*, *Duplicates* and *Large files*, kinds (Images, Documents…) and your **saved searches**.
+- **List or grid** with real Windows thumbnails, sort by name, date, size, type or folder, and **group by tag**, folder, kind or date.
+- **Details panel**: preview, tags, folder, size, dates, duplicates, and where the current plan would move it.
+- Fast with big folders: 20,000 files filter in under 200 ms.
+
+</td>
+</tr>
+<tr>
+<td><img src="docs/library-grid.png" alt="Grid view with image thumbnails"></td>
+<td><img src="docs/quickfind.png" alt="Quick find"></td>
+</tr>
+</table>
+
+**Search syntax** (mix and match; everything is AND):
+
+| Type | To find |
+| --- | --- |
+| `budget` `"tax return"` | names, folders and tags containing the words |
+| `#invoice` `-#draft` | files with, or without, a tag (`#school` also matches `#school/math`) |
+| `type:pdf,docx` &nbsp; `kind:image` | by extension, or by kind: image, video, audio, document, spreadsheet, code, archive, 3d… |
+| `size:>100mb` &nbsp; `size:1mb..10mb` | by size |
+| `modified:<7d` &nbsp; `modified:>1y` &nbsp; `modified:2024` | by when it last changed |
+| `in:Documents` | inside a folder |
+| `is:untagged` `is:duplicate` `is:large` `is:recent` | quick filters |
+
+Tags are stored in Onyx's own app-data folder, one small file per folder you open. **Nothing is written into your folders, and your files are never changed.** When Onyx moves files, their tags move with them (and back again on undo); if you move a file yourself, Onyx finds it again by name and size.
+
+<br>
+
 ## ✦ Features
 
 <table>
@@ -114,6 +170,7 @@ Folders that work as one piece **stay together**: a website (HTML plus its JS an
 | ▤ **By type** | Images, Documents, 3D Models, Installers, … |
 | ◷ **By date** | Year and month each file was last changed |
 | ◫ **By size** | Small, medium, large and huge |
+| 🏷 **By tag** | A folder for each file's main tag (your own tags come first); untagged files stay put |
 | ⤒ **Flatten** | Pulls files out of subfolders to the top level (bundles stay intact) |
 
 **Inside folders**: choose how deep Onyx goes.
@@ -178,6 +235,7 @@ Eight dark (Onyx, Jet, Graphite, Lapis, Jade, Amber, Garnet, Amethyst) and four 
 | **Appearance** | Themes, your own color schemes, accent, fonts, zoom, density, roundness, reduced motion |
 | **Layout** | Presets, where each panel lives, ribbon and status bar |
 | **File explorer** | Sort order, folders first, type tags, sizes, marks on files that will move, indent guides |
+| **Library &amp; tags** | Tag new files automatically, tag with AI, what double-click does, thumbnails, tag dots in the file tree, details panel |
 | **Graph view** | Files and labels on or off, color by folder or type, node size, link distance, repel force, text fade |
 | **Organizing** | How deep to sort, series threshold, max depth, rename built-in folders (`Images` → `Pictures`) |
 | **My rules** | Keyword, extension, pattern, size and age rules; never-move list; folders to keep together or always sort inside |
@@ -194,6 +252,8 @@ Settings are searchable (`Ctrl + ,`, then type).
 
 | Action | Keys | | Action | Keys |
 | --- | --- | --- | --- | --- |
+| Quick find a file | <kbd>Ctrl</kbd> <kbd>K</kbd> | | Library | <kbd>Ctrl</kbd> <kbd>L</kbd> |
+| Search the Library | <kbd>Ctrl</kbd> <kbd>F</kbd> | | Tag selected files | <kbd>Ctrl</kbd> <kbd>T</kbd> or <kbd>#</kbd> |
 | Command palette | <kbd>Ctrl</kbd> <kbd>P</kbd> | | Proposed structure | <kbd>Ctrl</kbd> <kbd>1</kbd> |
 | Open folder | <kbd>Ctrl</kbd> <kbd>O</kbd> | | Changes | <kbd>Ctrl</kbd> <kbd>2</kbd> |
 | Organize | <kbd>Ctrl</kbd> <kbd>Enter</kbd> | | Graph view | <kbd>Ctrl</kbd> <kbd>G</kbd> |
@@ -233,6 +293,18 @@ Put a text file named <code>ai-key.txt</code> containing the key next to <code>O
 </details>
 
 <details>
+<summary><b>Where are my tags stored? Do they change my files?</b></summary>
+<br>
+In Onyx's app-data folder (<code>%APPDATA%\Onyx\tags</code>), one small file per folder. Onyx never writes tags into your files or folders. They follow files that Onyx moves, come back on undo, and survive you moving a file yourself as long as its name and size stay the same.
+</details>
+
+<details>
+<summary><b>What does AI tagging send?</b></summary>
+<br>
+File names, sizes and dates, plus the list of tags you already use, to the AI provider you picked. Never file contents. Offline tagging from names sends nothing at all.
+</details>
+
+<details>
 <summary><b>Can I try it without touching my files?</b></summary>
 <br>
 Yes. Click the flask icon in the ribbon to open the <b>demo vault</b>: a realistic messy folder that only exists in memory.
@@ -253,7 +325,7 @@ Needs [Node.js](https://nodejs.org).
 ```bash
 npm install
 npm start        # run with Electron
-npm test         # organizing, undo, settings and AI-provider tests (no Electron needed)
+npm test         # organizing, undo, settings, AI-provider and tagging tests (no Electron needed)
 npm run dist     # package with electron-builder (Windows x64)
 ```
 
@@ -262,6 +334,8 @@ onyx/
 ├── main.js          Electron main process: scan, apply, undo, AI providers, settings
 ├── preload.js       the window.onyx bridge (context-isolated)
 ├── engine.js        pure organizing logic, shared by main and renderer
+├── tags.js          tagging: offline tagger, AI prompt, search language, tag database
+├── library.js       the Library, Tags panel, quick find and tag editor
 ├── renderer.js      app UI and commands
 ├── workspace.js     draggable, dockable panels
 ├── settings.js      settings window and color scheme builder

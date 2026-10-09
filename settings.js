@@ -7,6 +7,7 @@
     { id: 'appearance', name: 'Appearance', icon: 'palette', desc: 'Themes, colors, fonts and how dense the interface feels. Changes apply instantly.' },
     { id: 'layout', name: 'Layout', icon: 'panel-left', desc: 'Which parts of the window you see and where they sit.' },
     { id: 'files', name: 'File explorer', icon: 'files', desc: 'What the file tree shows and how it’s sorted.' },
+    { id: 'library', name: 'Library & tags', icon: 'tag', desc: 'Browsing, searching and tagging your files. Tags live in Onyx’s own data folder; your files are never changed.' },
     { id: 'graph', name: 'Graph view', icon: 'git-fork', desc: 'How the graph is drawn. You can also change these from the graph’s Display panel.' },
     { id: 'organizing', name: 'Organizing', icon: 'sparkles', desc: 'How Onyx groups loose files.' },
     { id: 'rules', name: 'My rules', icon: 'list-checks', desc: 'Your own rules always win over Onyx’s and the AI’s choices.' },
@@ -105,6 +106,12 @@
       { s: 'files', k: 'ui.explorer.guides', name: 'Indent guides', desc: 'Vertical lines that show nesting.', c: () => ctl.toggle('ui.explorer.guides') },
 
       // graph
+      { s: 'library', k: 'ui.library.autoTag', name: 'Tag new files automatically', desc: 'When a folder opens, Onyx tags new files from their names: #invoice, #screenshot, #2024, a shared tag for a series. Runs offline and instantly. Tags you remove never come back.', kw: 'auto tag automatic offline rules', c: () => ctl.seg('ui.library.autoTag', [['rules', 'From names'], ['off', 'Off']]) },
+      { s: 'library', k: 'x.libai', name: 'Tag with AI', desc: 'AI reads file names (never contents) and adds 1 to 4 tags about topic, project or purpose. It reuses your existing tags. Uses the provider from AI provider.', kw: 'ai tag smart', noReset: true, c: () => '<button class="btn" data-action="lib-ai-untagged">' + C.icon('sparkles') + 'Tag untagged files</button><button class="btn" data-action="lib-clear-auto">' + C.icon('rotate-ccw') + 'Remove automatic tags</button>' },
+      { s: 'library', k: 'ui.library.dblClick', name: 'Double-click a file to', desc: 'Enter does the same; Shift+Enter does the other.', kw: 'open reveal double click', c: () => ctl.seg('ui.library.dblClick', [['open', 'Open it'], ['reveal', 'Show it in its folder']]) },
+      { s: 'library', k: 'ui.library.thumbs', name: 'Show thumbnails', desc: 'Previews of images, videos and documents in grid view and the details panel, made by Windows.', kw: 'preview thumbnail image', c: () => ctl.toggle('ui.library.thumbs') },
+      { s: 'library', k: 'ui.library.treeTags', name: 'Show tags in the file tree', desc: 'Small colored dots next to tagged files in Files.', kw: 'dots tree explorer', c: () => ctl.toggle('ui.library.treeTags') },
+      { s: 'library', k: 'ui.library.details', name: 'Show the details panel', desc: 'Preview, tags and properties of the selected file, on the right of the Library.', kw: 'inspector preview panel', c: () => ctl.toggle('ui.library.details') },
       { s: 'graph', k: 'ui.graph.files', name: 'Show files', desc: 'Off shows folders only, which is clearer for big folders.', c: () => ctl.toggle('ui.graph.files') },
       { s: 'graph', k: 'ui.graph.labels', name: 'Show labels', desc: '', c: () => ctl.toggle('ui.graph.labels') },
       { s: 'graph', k: 'ui.graph.colorBy', name: 'Color nodes by', desc: '', c: () => ctl.seg('ui.graph.colorBy', [['folder', 'Top folder'], ['type', 'File type']]) },

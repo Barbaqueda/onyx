@@ -4,6 +4,8 @@
 
   const VIEWS = {
     files: { icon: 'files', name: 'Files', home: 'left' },
+    tags: { icon: 'tag', name: 'Tags', home: 'left' },
+    library: { icon: 'library', name: 'Library', home: 'main' },
     organize: { icon: 'sparkles', name: 'Organize', home: 'right' },
     structure: { icon: 'list-tree', name: 'Structure', home: 'main' },
     changes: { icon: 'arrow-left-right', name: 'Changes', home: 'main' },
@@ -12,11 +14,12 @@
   const ALL = Object.keys(VIEWS);
   const R = (tabs, active) => ({ tabs, active: active || tabs[0] || null, collapsed: false });
   const PRESETS = {
-    classic: { name: 'Classic', desc: 'Files left, Organize right, views in the middle', ws: () => ({ left: R(['files']), right: R(['organize']), main: [R(['structure', 'changes', 'graph'])], split: 'row', ratio: 0.5, hidden: [] }) },
-    swapped: { name: 'Swapped', desc: 'Organize on the left, files on the right', ws: () => ({ left: R(['organize']), right: R(['files']), main: [R(['structure', 'changes', 'graph'])], split: 'row', ratio: 0.5, hidden: [] }) },
-    review: { name: 'Review', desc: 'Structure and graph side by side', ws: () => ({ left: R(['files', 'organize'], 'organize'), right: R([]), main: [R(['structure', 'changes']), R(['graph'])], split: 'row', ratio: 0.55, hidden: [] }) },
-    stacked: { name: 'Stacked', desc: 'Changes above, graph below', ws: () => ({ left: R(['files']), right: R(['organize']), main: [R(['changes', 'structure']), R(['graph'])], split: 'column', ratio: 0.6, hidden: [] }) },
-    focus: { name: 'Focus', desc: 'One area with tabs, no sidebars', ws: () => ({ left: R([]), right: R([]), main: [R(['structure', 'changes', 'graph', 'organize', 'files'])], split: 'row', ratio: 0.5, hidden: [] }) },
+    classic: { name: 'Classic', desc: 'Tags and files left, Organize right, views in the middle', ws: () => ({ left: R(['tags', 'files']), right: R(['organize']), main: [R(['library', 'structure', 'changes', 'graph'])], split: 'row', ratio: 0.5, hidden: [] }) },
+    explore: { name: 'Explore', desc: 'Library front and center, organizing tucked away', ws: () => ({ left: R(['tags', 'files']), right: Object.assign(R(['organize']), { collapsed: true }), main: [R(['library', 'graph', 'structure', 'changes'])], split: 'row', ratio: 0.5, hidden: [] }) },
+    swapped: { name: 'Swapped', desc: 'Organize on the left, files and tags on the right', ws: () => ({ left: R(['organize']), right: R(['tags', 'files']), main: [R(['library', 'structure', 'changes', 'graph'])], split: 'row', ratio: 0.5, hidden: [] }) },
+    review: { name: 'Review', desc: 'Structure and graph side by side', ws: () => ({ left: R(['files', 'tags', 'organize'], 'organize'), right: R([]), main: [R(['structure', 'changes', 'library']), R(['graph'])], split: 'row', ratio: 0.55, hidden: [] }) },
+    stacked: { name: 'Stacked', desc: 'Changes above, graph below', ws: () => ({ left: R(['files', 'tags']), right: R(['organize']), main: [R(['changes', 'structure', 'library']), R(['graph'])], split: 'column', ratio: 0.6, hidden: [] }) },
+    focus: { name: 'Focus', desc: 'One area with tabs, no sidebars', ws: () => ({ left: R([]), right: R([]), main: [R(['library', 'structure', 'changes', 'graph', 'organize', 'files', 'tags'])], split: 'row', ratio: 0.5, hidden: [] }) },
   };
 
   let C = null;           // renderer context

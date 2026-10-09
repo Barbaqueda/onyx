@@ -70,7 +70,7 @@
   const EXT_TO_FOLDER = {};
   for (const [folder, exts] of TYPE_FOLDERS) for (const e of exts.split(' ')) EXT_TO_FOLDER[e] = folder;
 
-  function typeFolder(ext) { return EXT_TO_FOLDER[ext] || 'Other'; }
+  function typeFolder(ext) { return Object.prototype.hasOwnProperty.call(EXT_TO_FOLDER, ext) ? EXT_TO_FOLDER[ext] : 'Other'; }
   function typeGroup(ext) { return typeFolder(ext).split('/')[0]; }
 
   // Keyword rules only apply to "content" files. A file called
@@ -596,6 +596,10 @@
         const s = f.size;
         const folder = s < 1048576 ? 'Small (under 1 MB)' : s < 10485760 ? 'Medium (1–10 MB)' : s < 1073741824 ? 'Large (10 MB–1 GB)' : 'Huge (over 1 GB)';
         a = { folder, reason: 'Size', src: 'size' };
+      } else if (strategy === 'tags') {
+        const t = f.tagPrimary;
+        a = t ? { folder: sanitizeFolder(t.split('/').map(seg => titleCase(seg.replace(/-/g, ' '))).join('/'), 3) || '', reason: 'Tagged #' + t, src: 'tag' }
+          : { folder: '', reason: 'No tags yet', src: 'tag' };
       } else {
         const r = ruleFolder(f);
         a = { folder: r.folder, reason: r.reason, src: 'rules' };
@@ -649,7 +653,7 @@
     }
 
     // --- avoid single-file subfolders we invent
-    if (st.collapseSingles && strategy !== 'date' && strategy !== 'size') {
+    if (st.collapseSingles && strategy !== 'date' && strategy !== 'size' && strategy !== 'tags') {
       for (let pass = 0; pass < 2; pass++) {
         const counts = new Map();
         for (const a of assign.values()) { let p = a.folder; while (p) { counts.set(p.toLowerCase(), (counts.get(p.toLowerCase()) || 0) + 1); p = dirname(p); } }
@@ -669,7 +673,7 @@
       if (parent && a.folder && !a.user && (a.folder.toLowerCase() === parent.toLowerCase() || a.folder.split('/').some(s => sameFamily(s, basename(parent))))) {
         items.push(item(f, f.path, 'Already in a fitting folder', 'keep')); continue;
       }
-      if (!a.folder) items.push(item(f, f.path, isLoose(f) ? 'Stays at top level' : 'Stays where it is', 'keep'));
+      if (!a.folder) items.push(item(f, f.path, strategy === 'tags' ? 'No tags yet, so it stays put' : isLoose(f) ? 'Stays at top level' : 'Stays where it is', 'keep'));
       else items.push(Object.assign(item(f, a.folder + '/' + f.name, a.reason, 'move'), { by: a.src }));
     }
     return finish(items, ctx, strategy);
@@ -847,5 +851,6 @@
     buildPlan, aiBatches, parseAiResponse, sanitizeFolder, seriesStem, detectSeries, ruleFolder,
     RULE_TYPES, CATEGORY_LIST, ruleMatches, globToRegex, joinPath, classifyDirs, nestedKeepReason,
     typeFolder, untouchableReason, buildContext, splitExt, dirname, basename, fmtSize, DEFAULTS,
+    typeGroup, titleCase, nameTexts, hasKeyword, keywordFolder, KEYWORD_RULES, MEDIA_RULES, CONTENT_GROUPS, MEDIA_GROUPS, TYPE_FOLDERS,
   };
 });

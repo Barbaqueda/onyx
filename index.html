@@ -17,6 +17,8 @@
     <div class="ribbon-actions">
       <button class="clickable-icon" data-action="open-folder" data-tip="Open folder as vault" data-cmd="open-folder" data-icon="folder-open"></button>
       <button class="clickable-icon" data-action="organize" data-tip="Organize" data-cmd="organize" data-icon="sparkles"></button>
+      <button class="clickable-icon" data-action="view-library" data-tip="Library" data-cmd="view-library" data-icon="library"></button>
+      <button class="clickable-icon" data-action="quick-find" data-tip="Quick find" data-cmd="quick-find" data-icon="search"></button>
       <button class="clickable-icon" data-action="view-graph" data-tip="Open graph view" data-cmd="view-graph" data-icon="git-fork"></button>
       <button class="clickable-icon" data-action="palette" data-tip="Open command palette" data-cmd="palette" data-icon="terminal-square"></button>
       <button class="clickable-icon" data-action="undo" id="ribbonUndo" data-tip="Undo last organize" data-cmd="undo" data-icon="undo-2"></button>
@@ -59,6 +61,8 @@
   <section class="view-root" data-view="organize"><div class="side-content" id="side"></div></section>
   <section class="view-root" data-view="structure"><div class="view-header"><div class="view-header-title" data-title></div><div class="view-actions" data-actions></div></div><div class="view-content" id="vs-structure"></div></section>
   <section class="view-root" data-view="changes"><div class="view-header"><div class="view-header-title" data-title></div><div class="view-actions" data-actions></div></div><div class="view-content" id="vs-changes"></div></section>
+  <section class="view-root" data-view="library"><div class="view-header"><div class="view-header-title" data-title></div><div class="view-actions" data-actions></div></div><div class="view-content lib-host" id="vs-library"></div></section>
+  <section class="view-root" data-view="tags"><div class="nav-header" id="tagsHeader"></div><div class="tags-panel" id="vs-tags"></div></section>
   <section class="view-root" data-view="graph"><div class="view-header"><div class="view-header-title" data-title></div><div class="view-actions" data-actions></div></div><div class="view-content" id="vs-graph"></div></section>
 </div>
 
@@ -71,11 +75,13 @@
 <div class="drop-indicator" id="dropIndicator"></div>
 
 <script src="engine.js"></script>
+<script src="tags.js"></script>
 <script src="icons.js"></script>
 <script src="theme.js"></script>
 <script src="graph.js"></script>
 <script src="settings.js"></script>
 <script src="workspace.js"></script>
+<script src="library.js"></script>
 <script src="renderer.js"></script>
 </body>
 </html>

@@ -1,8 +1,10 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, safeStorage, clipboard, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, safeStorage, clipboard, Menu, nativeImage } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const E = require('./engine');
+const TG = require('./tags');
+const crypto = require('crypto');
 
 let mainWindow;
 let scan = { root: '', files: [], dirs: [], skipped: [], demo: false };
@@ -28,7 +30,11 @@ function readJson(file, fallback) {
 }
 function writeJson(file, data) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, JSON.stringify(data, null, 2));
+  // write a temp file and rename it, so a crash mid-write never leaves a half-written file
+  const tmp = file + '.' + process.pid + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
+  try { fs.renameSync(tmp, file); }
+  catch (e) { try { fs.copyFileSync(tmp, file); fs.unlinkSync(tmp); } catch { throw e; } }
 }
 function loadSettings() {
   const s = readJson(SETTINGS_FILE(), {});
@@ -121,6 +127,7 @@ function loadFolder(folder) {
   if (danger) return { error: danger + ' Onyx won\'t reorganize it, to keep your system safe.' };
   const r = scanDirectory(folder);
   scan = { root: folder, files: r.files, dirs: r.dirs, skipped: r.skipped, demo: false };
+  loadTagDb(); syncTags();
   const s = loadSettings();
   s.ui.recent = [folder].concat((s.ui.recent || []).filter(x => x !== folder)).slice(0, 6);
   writeJson(SETTINGS_FILE(), s);
@@ -133,7 +140,54 @@ function vaultPayload() {
     rootPath: scan.root, demo: scan.demo,
     files: scan.files, dirs: scan.dirs, skipped: scan.skipped,
     undo: (() => { const h = scan.demo ? null : lastHistory(scan.root); return h ? { at: h.at, count: h.moves.length } : null; })(),
+    tags: tagView(), autoTagged: scan.autoTagged || 0,
   };
+}
+
+// ============================================================================
+// Tags (one small database per folder, in the app-data folder, so nothing is
+// written into the user's folders)
+// ============================================================================
+let tagDb = null;
+const tagFile = root => path.join(app.getPath('userData'), 'tags', crypto.createHash('sha1').update(path.resolve(root).toLowerCase()).digest('hex').slice(0, 16) + '.json');
+function loadTagDb() {
+  if (scan.demo) { tagDb = TG.emptyDb(); return; }
+  const file = tagFile(scan.root);
+  let data = null;
+  if (fs.existsSync(file)) {
+    try { data = JSON.parse(fs.readFileSync(file, 'utf8')); }
+    catch { try { fs.renameSync(file, file.replace(/\.json$/, '') + '.damaged-' + Date.now() + '.json'); } catch { /* keep going */ } }
+  }
+  tagDb = TG.cleanDb(data);
+  tagDb.root = scan.root;
+}
+function saveTagDb(db, root) {
+  db = db || tagDb; root = root || scan.root;
+  if (db && !(scan.demo && db === tagDb) && root) writeJson(tagFile(root), db);
+}
+function tagView() { return tagDb ? TG.view(tagDb, scan.files) : { files: {}, colors: {}, saved: [] }; }
+function autoTagMode() { const l = (loadSettings().ui || {}).library || {}; return l.autoTag || 'rules'; }
+// After every scan: follow moved files, then tag new files from their names (offline, instant)
+function syncTags() {
+  if (!tagDb) loadTagDb();
+  const complete = !scan.skipped.some(x => /^Stopped after/.test(x));
+  TG.reconcile(tagDb, scan.files, { complete });
+  scan.autoTagged = 0;
+  if (autoTagMode() === 'rules') {
+    const m = TG.autoTags(scan.files, scan.dirs);
+    scan.autoTagged = TG.applyAuto(tagDb, Object.fromEntries(m), 'rules', scan.files).files;
+  }
+  saveTagDb();
+}
+function insideRoot(rel) {
+  if (!scan.root) return null;
+  const full = path.resolve(scan.root, String(rel || ''));
+  const root = path.resolve(scan.root);
+  const inside = (p, r) => p.toLowerCase() === r.toLowerCase() || p.toLowerCase().startsWith(r.toLowerCase() + path.sep);
+  if (!inside(full, root)) return null;
+  // follow junctions and links: the real file must be inside the real folder too
+  try { if (!inside(fs.realpathSync(full), fs.realpathSync(root))) return null; } catch { /* missing file: callers report it */ }
+  return full;
 }
 
 // ============================================================================
@@ -311,7 +365,7 @@ function applyPlan(root, items) {
     h.push({ root, at: Date.now(), moves, createdDirs: createdDirs.map(d => path.relative(root, d)), removedDirs });
     writeJson(HISTORY_FILE(), h.slice(-30));
   }
-  return { applied: moves.length, failed };
+  return { applied: moves.length, failed, moves };
 }
 
 function undoLast(root) {
@@ -320,7 +374,7 @@ function undoLast(root) {
   for (let i = h.length - 1; i >= 0; i--) if (h[i].root === root && !h[i].undone) { idx = i; break; }
   if (idx < 0) return { error: 'Nothing to undo' };
   const entry = h[idx];
-  let restored = 0; const failed = [];
+  let restored = 0; const failed = []; const restoredMoves = [];
   for (const m of [...entry.moves].reverse()) {
     const from = path.join(root, m.from), to = path.join(root, m.to);
     try {
@@ -329,6 +383,7 @@ function undoLast(root) {
       fs.mkdirSync(path.dirname(from), { recursive: true });
       fs.renameSync(to, from);
       restored++;
+      restoredMoves.push({ from: m.to, to: m.from });
     } catch (e) { failed.push({ source: m.to, error: e.message }); }
   }
   for (const d of [...(entry.createdDirs || [])].sort((a, b) => b.length - a.length)) {
@@ -336,7 +391,7 @@ function undoLast(root) {
   }
   entry.undone = true;
   writeJson(HISTORY_FILE(), h);
-  return { restored, failed };
+  return { restored, failed, restoredMoves };
 }
 
 // ============================================================================
@@ -385,12 +440,14 @@ ipcMain.handle('open-recent', async (e, folder) => {
 ipcMain.handle('load-demo', async () => {
   const v = demoVault();
   scan = { root: '', files: v.files, dirs: v.dirs, skipped: [], demo: true };
+  loadTagDb(); syncTags();
   return vaultPayload();
 });
 ipcMain.handle('rescan', async () => {
   if (scan.demo || !scan.root) return vaultPayload();
   const r = scanDirectory(scan.root);
   Object.assign(scan, r);
+  syncTags();
   return vaultPayload();
 });
 
@@ -408,7 +465,13 @@ ipcMain.handle('organize', async (event, strategy) => {
       } catch (e) { ai.error = e.message || String(e); }
     }
   }
-  const plan = E.buildPlan({ files: scan.files, dirs: scan.dirs, strategy, settings: settings.organize, aiFolders: folders });
+  let files = scan.files;
+  if (strategy === 'tags') {
+    const v = tagDb ? tagDb.files : {};
+    const low = new Map(Object.keys(v).map(k => [k.toLowerCase(), v[k]]));
+    files = scan.files.map(f => Object.assign({}, f, { tagPrimary: TG.primaryTag(low.get(f.path.toLowerCase())) }));
+  }
+  const plan = E.buildPlan({ files, dirs: scan.dirs, strategy, settings: settings.organize, aiFolders: folders });
   plan.ai = ai;
   plan.demo = scan.demo;
   return { plan };
@@ -418,14 +481,20 @@ ipcMain.handle('apply-plan', async (event, items) => {
   if (scan.demo) return { error: 'This is the demo vault — nothing to move. Open a real folder to apply changes.' };
   if (!scan.root) return { error: 'No folder open' };
   const r = applyPlan(scan.root, items);
+  if (tagDb) TG.applyMoves(tagDb, r.moves);
   Object.assign(scan, scanDirectory(scan.root));
+  syncTags();
+  delete r.moves;
   return Object.assign(r, { vault: vaultPayload() });
 });
 
 ipcMain.handle('undo', async () => {
   if (!scan.root) return { error: 'No folder open' };
   const r = undoLast(scan.root);
+  if (tagDb && r.restoredMoves) TG.applyMoves(tagDb, r.restoredMoves);
   Object.assign(scan, scanDirectory(scan.root));
+  syncTags();
+  delete r.restoredMoves;
   return Object.assign(r, { vault: vaultPayload() });
 });
 
@@ -508,6 +577,115 @@ ipcMain.handle('reveal', async (e, rel) => {
   if (rel) shell.showItemInFolder(full); else shell.openPath(full);
 });
 ipcMain.handle('copy-text', async (e, text) => { clipboard.writeText(String(text)); });
+
+// tag-database keys, not filesystem paths (names like "notes..txt" are fine)
+const cleanPaths = list => (Array.isArray(list) ? list : []).map(String).filter(p => p && p.length < 2000).slice(0, 50000);
+ipcMain.handle('tags-edit', async (e, { paths, add, remove }) => {
+  if (!tagDb) return tagView();
+  TG.edit(tagDb, cleanPaths(paths), add, remove); saveTagDb(); return tagView();
+});
+ipcMain.handle('tags-rename', async (e, { from, to }) => { if (tagDb) { TG.renameTag(tagDb, from, to); saveTagDb(); } return tagView(); });
+ipcMain.handle('tags-delete', async (e, name) => { if (tagDb) { TG.deleteTag(tagDb, name); saveTagDb(); } return tagView(); });
+ipcMain.handle('tags-color', async (e, { name, color }) => {
+  if (!tagDb) return tagView();
+  const t = TG.normTag(name);
+  if (/^#[0-9a-f]{6}$/i.test(color || '')) tagDb.colors[t] = color; else delete tagDb.colors[t];
+  saveTagDb(); return tagView();
+});
+ipcMain.handle('tags-saved', async (e, list) => {
+  if (!tagDb) return tagView();
+  tagDb.saved = (Array.isArray(list) ? list : []).filter(x => x && x.name && x.query).slice(0, 50).map(x => ({ name: String(x.name).slice(0, 60), query: String(x.query).slice(0, 400) }));
+  saveTagDb(); return tagView();
+});
+ipcMain.handle('tags-clear-auto', async (e, paths) => { if (tagDb) { TG.clearAuto(tagDb, paths ? cleanPaths(paths) : null); saveTagDb(); } return tagView(); });
+
+let tagRun = null;
+ipcMain.handle('tags-cancel', async () => { if (tagRun) tagRun.cancelled = true; });
+ipcMain.handle('tags-auto', async (event, { mode, paths, scope }) => {
+  if (!tagDb) return { error: 'Open a folder first' };
+  let files = scan.files.filter(f => !E.untouchableReason(f) || /\.(crdownload|part|partial|download)$/i.test(f.name));
+  const view = tagView();
+  if (paths && paths.length) { const set = new Set(cleanPaths(paths).map(p => p.toLowerCase())); files = files.filter(f => set.has(f.path.toLowerCase())); }
+  else if (scope === 'untagged') files = files.filter(f => !view.files[f.path]);
+  if (mode === 'rules') {
+    const m = TG.autoTags(scan.files, scan.dirs, { only: new Set(files.map(f => f.path)) });
+    const r = TG.applyAuto(tagDb, Object.fromEntries(m), 'rules', scan.files);
+    saveTagDb();
+    return { view: tagView(), added: r.added, files: r.files, checked: files.length };
+  }
+  const settings = loadSettings();
+  if (settings.ai.provider === 'off') return { error: 'AI is turned off. Pick a provider in Settings → AI provider, or use offline tagging.' };
+  if (!paths && scope !== 'all') files = TG.needsAuto(tagDb, files, 'ai');
+  if (!paths && scope === 'all') files = TG.aiOrder(tagDb, files);
+  const capped = files.length > 3000;
+  files = files.slice(0, 3000);
+  // this run belongs to this folder, even if another one is opened meanwhile
+  const db = tagDb, root = scan.root, demo = scan.demo;
+  if (!files.length) return { view: tagView(), added: 0, files: 0, checked: 0 };
+  const counts = new Map();
+  for (const v of Object.values(view.files)) for (const t of v.t) counts.set(t, (counts.get(t) || 0) + 1);
+  const vocab = [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([t]) => t).slice(0, 80);
+  const batches = TG.aiTagBatches(files, vocab, { batchSize: 120 });
+  const run = tagRun = { cancelled: false };
+  const used = new Set();
+  let added = 0, touched = 0, failed = 0, model = '', lastErr = null;
+  let switched = false;
+  for (let i = 0; i < batches.length; i++) {
+    if (run.cancelled) break;
+    if (tagDb !== db || scan.root !== root || scan.demo !== demo) { switched = true; break; }
+    const b = batches[i];
+    event.sender.send('tag-progress', { batch: i + 1, of: batches.length, files: files.length });
+    let parsed = null;
+    for (let attempt = 0; attempt < 2 && !parsed; attempt++) {
+      try { const r = await chat(settings, b.system, b.user([...used].slice(0, 60))); model = r.model; parsed = TG.parseAiTags(r.text, b.ids); }
+      catch (e) { lastErr = e; }
+    }
+    if (!parsed) { if (i === 0) { tagRun = null; return { error: (lastErr && lastErr.message) || 'AI tagging failed' }; } failed++; continue; }
+    if (tagDb !== db || scan.root !== root) { switched = true; break; }
+    for (const id of b.ids) if (!Object.prototype.hasOwnProperty.call(parsed, id)) parsed[id] = [];
+    const r = TG.applyAuto(db, parsed, 'ai', scan.files);
+    added += r.added; touched += r.files;
+    for (const list of Object.values(parsed)) for (const t of list) used.add(t);
+    saveTagDb(db, root);
+  }
+  tagRun = null;
+  if (switched) return { error: 'Stopped AI tagging because another folder was opened. Tags added so far were kept.' };
+  return { view: tagView(), added, files: touched, checked: files.length, model, failedBatches: failed, cancelled: run.cancelled, capped };
+});
+
+const EXEC_EXT = /\.(exe|msi|bat|cmd|com|ps1|vbs|vbe|js|jse|wsf|wsh|scr|pif|lnk|reg|hta|cpl|jar|msix|appx)$/i;
+ipcMain.handle('open-file', async (e, rel) => {
+  if (scan.demo) return { error: 'The demo vault only exists in memory, so there is nothing to open.' };
+  const full = insideRoot(rel);
+  if (!full || full === path.resolve(scan.root)) return { error: 'That file isn\'t in this folder.' };
+  if (!fs.existsSync(full)) return { error: 'That file no longer exists. Reload the folder.' };
+  const err = await shell.openPath(full);
+  return err ? { error: err } : { ok: true, program: EXEC_EXT.test(full) };
+});
+
+const thumbs = new Map();
+ipcMain.handle('file-thumb', async (e, { rel, size }) => {
+  if (scan.demo || !scan.root) return null;
+  const full = insideRoot(rel);
+  if (!full) return null;
+  size = Math.max(32, Math.min(512, (size | 0) || 160));
+  let st;
+  try { st = fs.statSync(full); } catch { return null; }
+  const key = full + '|' + st.mtimeMs + '|' + size;
+  if (thumbs.has(key)) return thumbs.get(key);
+  let img = null, kind = 'thumb';
+  if (process.platform !== 'linux' && nativeImage.createThumbnailFromPath) {
+    try { img = await nativeImage.createThumbnailFromPath(full, { width: size, height: size }); } catch { img = null; }
+  }
+  if ((!img || img.isEmpty()) && /\.(png|jpe?g|gif|webp|bmp|ico)$/i.test(full) && st.size < 40 * 1048576) {
+    try { const n = nativeImage.createFromPath(full); if (!n.isEmpty()) { const s0 = n.getSize(); img = s0.width > size || s0.height > size ? n.resize(s0.width >= s0.height ? { width: size } : { height: size }) : n; } } catch { img = null; }
+  }
+  if (!img || img.isEmpty()) { kind = 'icon'; try { img = await app.getFileIcon(full, { size: size >= 48 ? 'large' : 'normal' }); } catch { img = null; } }
+  const out = img && !img.isEmpty() ? { url: img.toDataURL(), kind } : null;
+  thumbs.set(key, out);
+  if (thumbs.size > 800) thumbs.delete(thumbs.keys().next().value);
+  return out;
+});
 
 // ============================================================================
 // Window
