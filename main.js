@@ -584,6 +584,14 @@ function importKeyFile() {
   }
 }
 
+// One Onyx at a time: launching it again brings the open window forward
+if (!app.requestSingleInstanceLock()) app.quit();
+app.on('second-instance', () => {
+  if (!mainWindow) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show(); mainWindow.focus();
+});
+
 app.whenReady().then(() => {
   importKeyFile();
   fixShortcuts();

@@ -1,0 +1,6 @@
+node_modules/
+dist/
+out/
+# API keys are imported on first launch and must never be committed
+ai-key.txt
+*.log

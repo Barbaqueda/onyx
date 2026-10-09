@@ -6,7 +6,8 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder --win --x64"
+    "dist": "electron-builder --win --x64",
+    "test": "node test/e2e.js && node test/deep.js && node test/persist.js && node test/freeai.js"
   },
   "devDependencies": {
     "electron": "32.3.3",
