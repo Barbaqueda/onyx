@@ -3,6 +3,9 @@
   "productName": "Onyx",
   "version": "2.2.0",
   "description": "Onyx — Smart File Organizer",
+  "author": "Alexander Dunn",
+  "license": "UNLICENSED",
+  "private": true,
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -36,6 +39,7 @@
       "onyx-stone.ico",
       "icon.png",
       "package.json"
-    ]
+    ],
+    "copyright": "Copyright (c) 2026 Alexander Dunn. All rights reserved."
   }
 }

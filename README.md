@@ -7,6 +7,7 @@
   <img alt="Electron 32" src="https://img.shields.io/badge/Electron-32-1a1a1d?style=for-the-badge&logo=electron&logoColor=c9ccd5">
   <img alt="Works offline" src="https://img.shields.io/badge/works-offline-1a1a1d?style=for-the-badge&logoColor=c9ccd5">
   <img alt="Undo everything" src="https://img.shields.io/badge/undo-every%20move-1a1a1d?style=for-the-badge">
+  <a href="LICENSE"><img alt="License: all rights reserved" src="https://img.shields.io/badge/license-all%20rights%20reserved-1a1a1d?style=for-the-badge"></a>
 </p>
 
 <p align="center">
@@ -15,7 +16,8 @@
   <a href="#-features"><b>Features</b></a> &nbsp;·&nbsp;
   <a href="#-make-it-yours"><b>Make it yours</b></a> &nbsp;·&nbsp;
   <a href="#-shortcuts"><b>Shortcuts</b></a> &nbsp;·&nbsp;
-  <a href="#-development"><b>Development</b></a>
+  <a href="#-development"><b>Development</b></a> &nbsp;·&nbsp;
+  <a href="#-license"><b>License</b></a>
 </p>
 
 <br>
@@ -29,6 +31,9 @@ Your Downloads folder is a mess, and every tool that promises to fix it either d
 <br>
 
 ## ⬇ Get it
+
+> [!IMPORTANT]
+> Onyx is proprietary software. The code is public so you can see it, but building, running, copying or redistributing it needs written permission. See [License](#-license).
 
 > [!TIP]
 > No installer, no Node.js, no admin rights. One double-click builds the app.
@@ -266,6 +271,14 @@ onyx/
 ├── build-onyx.ps1   no-tools Windows build (run via "Build Onyx.bat")
 └── test/            Node tests
 ```
+
+<br>
+
+## ⚖ License
+
+**Copyright © 2026 Alexander Dunn. All rights reserved.**
+
+Onyx is proprietary. You're welcome to read the code here on GitHub, but no license is granted: copying, modifying, building, running, redistributing or selling it, in whole or in part, needs prior written permission. Forking on GitHub doesn't grant any of those rights. The full terms are in [`LICENSE`](LICENSE). For permission or licensing enquiries, get in touch via [@Barbaqueda](https://github.com/Barbaqueda).
 
 <br>
 
