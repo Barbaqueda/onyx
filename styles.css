@@ -801,3 +801,34 @@ body.dragging-files .tp-tag { outline: 1px dashed color-mix(in srgb, var(--tc) 4
   .lib-tool { padding: 0 9px; }
 }
 @container (max-width: 520px) { .lib-foot .muted { display: none; } }
+
+/* Library: folder browsing */
+.lib-nav { display: flex; align-items: center; gap: 2px; padding: 0 12px 8px; min-width: 0; }
+.lib-nav > .clickable-icon { width: 28px; height: 28px; flex-shrink: 0; }
+.lib-nav > .clickable-icon .svg-icon { width: 16px; height: 16px; }
+.lib-crumbs { flex: 1; min-width: 0; display: flex; align-items: center; gap: 1px; margin-left: 6px; height: 30px; padding: 0 4px; border-radius: var(--radius-s); background: var(--bg-primary); border: 1px solid var(--border); overflow: hidden; }
+.crumb { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 7px; border-radius: var(--radius-s); color: var(--text-muted); font-size: 12.5px; white-space: nowrap; max-width: 220px; flex-shrink: 1; min-width: 0; }
+.crumb span { overflow: hidden; text-overflow: ellipsis; }
+.crumb:hover { background: var(--hover); color: var(--text); }
+.crumb.is-current { color: var(--text); font-weight: 600; }
+.crumb .svg-icon { color: var(--text-faint); flex-shrink: 0; }
+.crumb-sep { display: flex; color: var(--text-faint); flex-shrink: 0; }
+.crumb-sep .svg-icon { width: 12px; height: 12px; }
+.crumb-search { display: inline-flex; align-items: center; gap: 5px; margin-left: 8px; padding: 0 8px; height: 22px; border-radius: 11px; background: rgba(var(--accent-rgb), .1); color: var(--text-accent); font-size: 11.5px; white-space: nowrap; }
+.lib-browse { margin-left: 8px; flex-shrink: 0; }
+.lib-browse button { display: inline-flex; align-items: center; gap: 5px; }
+.lib-browse .svg-icon { width: 13px; height: 13px; }
+.q-scope { font-size: 12px; color: var(--text-muted); margin-left: 4px; }
+.lib.is-browsing { --lib-cols: minmax(180px, 2.6fr) minmax(100px, 1.5fr) 110px 76px; }
+.lib.is-browsing .lr-folder { display: none; }
+@container (max-width: 640px) { .lib.is-browsing { --lib-cols: minmax(140px, 2fr) minmax(80px, 1.4fr) 84px 64px; } }
+@container (max-width: 440px) { .lib.is-browsing { --lib-cols: minmax(120px, 1fr) 64px; } }
+.lib-row.is-dir .lr-name .svg-icon { color: var(--text-accent); opacity: .85; }
+.lib-row.is-dir .lr-base { font-weight: 500; }
+.lr-count { font-size: 12px; color: var(--text-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lt-folder { background: transparent; box-shadow: none; }
+.lt-folder .svg-icon { width: 64px; height: 64px; color: var(--text-accent); opacity: .7; stroke-width: 1.4; }
+.lib-tile.is-dir .lt-name { font-weight: 500; }
+.ld-folder { background: transparent; box-shadow: none; height: 120px; }
+.ld-folder .svg-icon { width: 72px; height: 72px; color: var(--text-accent); opacity: .7; stroke-width: 1.3; }
+@container (max-width: 680px) { .lib-browse span { display: none; } .crumb { max-width: 120px; } }

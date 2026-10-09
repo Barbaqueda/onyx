@@ -1209,7 +1209,13 @@
     const a = e.target.closest('[data-action]');
     if (a && !a.disabled) { e.preventDefault(); run(a.dataset.action, a); return; }
     const row = e.target.closest('.tree-item-self');
-    if (row) { if (row.dataset.kind === 'folder') toggleFolder(row); else select(row.dataset.source, row.dataset.tree === 'explorer' ? 'explorer' : 'view'); return; }
+    if (row) {
+      // like Explorer's navigation pane: the tree drives the Library when it's open
+      const drive = row.dataset.tree === 'explorer' && WS.isVisible('library');
+      if (row.dataset.kind === 'folder') { toggleFolder(row); if (drive) LIB.go(row.dataset.path); }
+      else { select(row.dataset.source, row.dataset.tree === 'explorer' ? 'explorer' : 'view'); if (drive) LIB.revealFile(row.dataset.source); }
+      return;
+    }
     const cr = e.target.closest('.change-row');
     if (cr) select(cr.dataset.source, 'view');
   });

@@ -8,8 +8,10 @@ EASIEST: double-click "Build Onyx.bat"
   then launches it. Run it again any time to rebuild; the download is cached.
 
 LIBRARY AND TAGS (Ctrl+L)
-  A better file explorer: every file in one searchable list or grid, with
-  thumbnails, a details panel, and tags.
+  A better file explorer: browse folder by folder like Windows Explorer
+  (address bar, Back/Forward/Up, Alt+arrows, Backspace, double-click to
+  open), or every file in one list. List or grid, thumbnails, a details
+  panel, and tags.
   Tags         added automatically from names (offline), by AI (one click,
                names only), or by hand: select files and press #, or drag
                them onto a tag. Tags live in Onyx's app-data folder; your

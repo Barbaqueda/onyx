@@ -86,7 +86,7 @@ flowchart LR
 
 ## 🏷 Library &amp; tags
 
-Windows Explorer shows you folders. The **Library** shows you *everything at once* and lets you narrow it down in a keystroke: type a name, click a tag, or combine filters like `#invoice type:pdf modified:2024`.
+The **Library** is a file explorer that also understands tags. Browse folder by folder like Windows Explorer, with a clickable address bar, Back / Forward / Up (<kbd>Alt</kbd> <kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd>, <kbd>Backspace</kbd>, or your mouse's side buttons), double-click to open, and folder sizes at a glance. Or switch to **All files** and see everything inside a folder in one list. Searching looks through the current folder and everything in it: type a name, click a tag, or combine filters like `#invoice type:pdf modified:2024`. Clicking a folder in the Files tree opens it here, just like Explorer's navigation pane.
 
 <p align="center">
   <img src="docs/library.png" alt="The Library: every file with its tags, folder, date and size, the Tags panel on the left, and a preview with editable tags on the right" width="100%">

@@ -13,12 +13,13 @@
     files: [], rows: [], offsets: [], total: 0, cols: 1, collapsed: new Set(),
     thumbs: new Map(), queue: [], busy: 0,
     run: null, dupsFor: null, dups: new Set(), tagFilter: '', vaultKey: '',
+    cwd: '', hist: [], fwd: [], dirs: [], statsFor: null, stats: null,
   };
 
   // ------------------------------------------------------------------ helpers
   const esc = s => C.esc(s);
   const icon = (n, c) => C.icon(n, c);
-  const U = () => Object.assign({ view: 'list', sort: 'name', dir: 'asc', group: 'none', details: true, autoTag: 'rules', dblClick: 'open', thumbs: true, treeTags: true, tagSort: 'count' }, (C.UI().library || {}));
+  const U = () => Object.assign({ browse: 'folders', view: 'list', sort: 'name', dir: 'asc', group: 'none', details: true, autoTag: 'rules', dblClick: 'open', thumbs: true, treeTags: true, tagSort: 'count' }, (C.UI().library || {}));
   function setPref(key, value) { C.setUi('library', key, value); refresh(); }
   const V = () => C.S.vault;
   const tagState = () => (V() && V().tags) || { files: {}, colors: {}, saved: [] };
@@ -84,20 +85,89 @@
     else fn = (a, b) => col.compare(a.name, b.name);
     return u.dir === 'desc' ? (a, b) => fn(b, a) : fn;
   }
+  // folder sizes, file counts and newest change, for every folder (recursive)
+  function dirStats() {
+    const v = V();
+    if (L.statsFor === v.files && L.stats) return L.stats;
+    const st = new Map(), children = new Map();
+    const ensure = p => {
+      const k = p.toLowerCase();
+      if (!st.has(k)) st.set(k, { isDir: true, path: p, name: E.basename(p), extension: '', size: 0, lastModified: 0, count: 0, sub: 0 });
+      return st.get(k);
+    };
+    for (const d of v.dirs) { const x = ensure(d.path); if (d.opaque) x.opaque = true; let p = E.dirname(d.path); while (p) { ensure(p); p = E.dirname(p); } }
+    for (const f of v.files) {
+      let d = E.dirname(f.path);
+      while (d) { const x = ensure(d); x.count++; x.size += f.size; if (f.lastModified > x.lastModified) x.lastModified = f.lastModified; d = E.dirname(d); }
+    }
+    for (const x of st.values()) {
+      const parent = E.dirname(x.path).toLowerCase();
+      if (!children.has(parent)) children.set(parent, []);
+      children.get(parent).push(x);
+      if (parent && st.has(parent)) st.get(parent).sub++;
+    }
+    L.stats = { st, children }; L.statsFor = v.files;
+    return L.stats;
+  }
+  const browsing = () => U().browse !== 'flat' && !L.query.trim();
   let cache = null;
   function compute() {
     const v = V();
-    if (!v) { L.files = []; return; }
+    if (!v) { L.files = []; L.dirs = []; return; }
     const u = U();
-    const key = [L.query, u.sort, u.dir];
+    const stats = dirStats();
+    // the folder we were in may have been moved or emptied away
+    while (L.cwd && !stats.st.has(L.cwd.toLowerCase())) L.cwd = E.dirname(L.cwd);
+    const key = [L.query, u.sort, u.dir, u.browse, L.cwd];
     if (cache && cache.files === v.files && cache.tags === v.tags && cache.key.join('\u0000') === key.join('\u0000') && !/(modified|mod|date):|is:recent/i.test(L.query)) return;
     cache = { files: v.files, tags: v.tags, key };
-    const q = TG.parseQuery(L.query);
-    const ctx = { now: Date.now(), dups: q.is.some(x => /dup/.test(x)) ? dupSet() : null };
-    L.files = v.files.filter(f => TG.matchFile(f, tagsOf(f.path), q, ctx)).sort(comparator());
-    const keep = new Set(L.files.map(f => f.path));
+    const cwdLow = L.cwd.toLowerCase();
+    const under = f => !cwdLow || f.path.toLowerCase().startsWith(cwdLow + '/');
+    const cmp = comparator();
+    if (!L.query.trim()) {
+      if (u.browse !== 'flat') {
+        L.files = v.files.filter(f => E.dirname(f.path).toLowerCase() === cwdLow).sort(cmp);
+        const kids = (stats.children.get(cwdLow) || []).slice();
+        const dcmp = u.sort === 'size' || u.sort === 'modified' ? cmp : (a, b) => (u.dir === 'desc' ? -1 : 1) * C.collator.compare(a.name, b.name);
+        L.dirs = kids.sort(dcmp);
+      } else { L.files = v.files.filter(under).sort(cmp); L.dirs = []; }
+    } else {
+      // like Explorer: search this folder and everything inside it
+      const q = TG.parseQuery(L.query);
+      const ctx = { now: Date.now(), dups: q.is.some(x => /dup/.test(x)) ? dupSet() : null };
+      L.files = v.files.filter(f => under(f) && TG.matchFile(f, tagsOf(f.path), q, ctx)).sort(cmp);
+      L.dirs = [];
+    }
+    const keep = new Set(L.files.map(f => f.path).concat(L.dirs.map(d => d.path)));
     for (const p of [...L.sel]) if (!keep.has(p)) L.sel.delete(p);
     if (L.focus && !keep.has(L.focus)) L.focus = null;
+  }
+  function dirBy(p) { return dirStats().st.get(String(p).toLowerCase()) || null; }
+
+  // ------------------------------------------------------------------ navigation (like File Explorer)
+  function go(path, opts) {
+    opts = opts || {};
+    path = path || '';
+    const from = L.cwd;
+    if (path === from && !L.query) { if (opts.select) { setSingle(opts.select); } return; }
+    if (!opts.noHistory && path !== from) { L.hist.push(from); if (L.hist.length > 100) L.hist.shift(); L.fwd = []; }
+    L.cwd = path;
+    if (!opts.keepQuery) { L.query = ''; const i = $('#libSearch'); if (i) i.value = ''; }
+    L.sel.clear(); L.focus = null; L.anchor = null;
+    const sc = $('#libScroll'); if (sc) sc.scrollTop = 0;
+    refresh();
+    const pick = opts.select || (from && E.dirname(from).toLowerCase() === path.toLowerCase() ? from : null);
+    if (pick && L.order && L.order.some(x => x.path === pick)) setSingle(pick);
+    renderTagsPanel();
+  }
+  function back() { if (!L.hist.length) return up(); const p = L.hist.pop(); L.fwd.push(L.cwd); go(p, { noHistory: true }); }
+  function forward() { if (!L.fwd.length) return; const p = L.fwd.pop(); L.hist.push(L.cwd); go(p, { noHistory: true }); }
+  function up() { if (!L.cwd) return; go(E.dirname(L.cwd)); }
+  function revealFile(path) {
+    const d = E.dirname(path);
+    if (!C.WS.isVisible('library')) C.WS.activate('library');
+    if (L.query || L.cwd !== d) go(d, { select: path });
+    else setSingle(path);
   }
   function groupsOf() {
     const g = U().group;
@@ -138,8 +208,14 @@
       for (let i = 0; i < files.length; i += L.cols) rows.push({ t: 'tiles', files: files.slice(i, i + L.cols), h: TILE_H });
     };
     const groups = groupsOf();
-    if (!groups) pushFiles(L.files);
-    else for (const g of groups) {
+    if (!groups) pushFiles(L.dirs.concat(L.files));
+    else {
+      if (L.dirs.length) {
+        rows.push({ t: 'g', key: 'dirs', label: 'Folders', count: L.dirs.length, size: L.dirs.reduce((a, d) => a + d.size, 0), h: GROUP });
+        if (!L.collapsed.has('dirs')) pushFiles(L.dirs);
+      }
+    }
+    if (groups) for (const g of groups) {
       const size = g.files.reduce((a, f) => a + f.size, 0);
       rows.push({ t: 'g', key: g.key, label: g.label, count: g.files.length, size, h: GROUP });
       if (!L.collapsed.has(g.key)) pushFiles(g.files);
@@ -178,6 +254,7 @@
       '<div class="segmented lib-mode" role="group" aria-label="View"><button data-lib="mode" data-v="list" aria-label="List" data-tip="List">' + icon('list') + '</button><button data-lib="mode" data-v="grid" aria-label="Grid" data-tip="Grid">' + icon('layout-grid') + '</button></div>' +
       '<button class="clickable-icon lib-details-btn" data-lib="details" aria-label="Details panel" data-tip="Details panel">' + icon('panel-right') + '</button>' +
       '</div>' +
+      '<div class="lib-nav" id="libNav"></div>' +
       '<div class="lib-chips" id="libChips"></div>' +
       '<div class="lib-progress" id="libProgress"></div>' +
       '<div class="lib-body">' +
@@ -192,7 +269,7 @@
     input.addEventListener('input', () => { clearTimeout(t); t = setTimeout(() => { L.query = input.value; const sc = $('#libScroll'); if (sc) sc.scrollTop = 0; refresh(); }, 70); });
     input.addEventListener('keydown', e => {
       if (e.key === 'Escape') { if (input.value) { input.value = ''; L.query = ''; refresh(); } else input.blur(); e.stopPropagation(); e.preventDefault(); }
-      else if (e.key === 'ArrowDown' || e.key === 'Enter') { e.preventDefault(); if (L.files[0]) { if (!L.focus) setSingle(L.files[0].path); $('#libScroll').focus(); } }
+      else if (e.key === 'ArrowDown' || e.key === 'Enter') { e.preventDefault(); const first = (L.order || [])[0]; if (first) { if (!L.focus) setSingle(first.path); $('#libScroll').focus(); } }
     });
     const sc = el.querySelector('#libScroll');
     let raf = 0;
@@ -205,6 +282,13 @@
     }
     el.addEventListener('click', onClick);
     el.addEventListener('dblclick', onDblClick);
+    // mouse back / forward buttons
+    el.addEventListener('mouseup', e => { if (e.button === 3) { e.preventDefault(); back(); } else if (e.button === 4) { e.preventDefault(); forward(); } });
+    el.addEventListener('keydown', e => {
+      if (e.altKey && e.key === 'ArrowLeft') { e.preventDefault(); back(); }
+      else if (e.altKey && e.key === 'ArrowRight') { e.preventDefault(); forward(); }
+      else if (e.altKey && e.key === 'ArrowUp') { e.preventDefault(); up(); }
+    });
     el.addEventListener('contextmenu', onContext);
     el.addEventListener('keydown', onDetailsKey);
     el.addEventListener('input', onDetailsInput);
@@ -217,6 +301,7 @@
     const lib = el.querySelector('.lib');
     lib.dataset.mode = u.view;
     lib.classList.toggle('no-details', !u.details);
+    lib.classList.toggle('is-browsing', browsing());
     const sortNames = { name: 'Name', modified: 'Modified', size: 'Size', type: 'Type', folder: 'Folder' };
     const groupNames = { none: 'No grouping', folder: 'Folder', tag: 'Tag', kind: 'Kind', date: 'Date' };
     el.querySelector('[data-lib="sort-menu"]').innerHTML = icon(u.dir === 'desc' ? 'arrow-down' : 'arrow-up', 'xs') + '<span>' + sortNames[u.sort] + '</span>';
@@ -226,15 +311,32 @@
     el.querySelector('[data-lib="details"]').classList.toggle('is-active', u.details);
     const input = el.querySelector('#libSearch');
     if (input.value !== L.query && document.activeElement !== input) input.value = L.query;
+    input.placeholder = 'Search ' + (L.cwd ? E.basename(L.cwd) : V().vaultName) + ': names, #tags, type:pdf, size:>10mb…';
     el.querySelector('.lib-clear').style.visibility = L.query ? 'visible' : 'hidden';
-    renderChips(); renderHead(); renderProgress();
+    renderNav(); renderChips(); renderHead(); renderProgress();
     buildRows(); paint(); renderFoot(); renderDetails();
+  }
+  function renderNav() {
+    const el = $('#libNav'); if (!el) return;
+    const v = V(), u = U();
+    const segs = L.cwd ? L.cwd.split('/') : [];
+    let acc = '';
+    const crumbs = ['<button class="crumb" data-lib="go" data-p="" title="' + esc(v.rootPath || v.vaultName) + '">' + icon('folder-open', 'xs') + '<span>' + esc(v.vaultName) + '</span></button>']
+      .concat(segs.map((sname, i) => { acc = acc ? acc + '/' + sname : sname; return '<span class="crumb-sep">' + icon('chevron-right', 'xs') + '</span><button class="crumb' + (i === segs.length - 1 ? ' is-current' : '') + '" data-lib="go" data-p="' + esc(acc) + '">' + esc(sname) + '</button>'; }));
+    el.innerHTML =
+      '<button class="clickable-icon" data-lib="back" aria-label="Back" data-tip="Back (Alt+←)"' + (L.hist.length || L.cwd ? '' : ' disabled') + '>' + icon('arrow-left') + '</button>' +
+      '<button class="clickable-icon" data-lib="forward" aria-label="Forward" data-tip="Forward (Alt+→)"' + (L.fwd.length ? '' : ' disabled') + '>' + icon('arrow-right') + '</button>' +
+      '<button class="clickable-icon" data-lib="up" aria-label="Up one folder" data-tip="Up one folder (Alt+↑)"' + (L.cwd ? '' : ' disabled') + '>' + icon('arrow-up') + '</button>' +
+      '<div class="lib-crumbs" role="navigation" aria-label="Folder">' + crumbs.join('') + (L.query.trim() ? '<span class="crumb-search">' + icon('search', 'xs') + 'Search results</span>' : '') + '</div>' +
+      '<div class="segmented lib-browse" role="group" aria-label="Show"><button data-lib="browse" data-v="folders" class="' + (u.browse !== 'flat' ? 'is-active' : '') + '" data-tip="Browse folder by folder">' + icon('folder') + '<span>Folders</span></button>' +
+      '<button data-lib="browse" data-v="flat" class="' + (u.browse === 'flat' ? 'is-active' : '') + '" data-tip="Every file inside this folder in one list">' + icon('files') + '<span>All files</span></button></div>';
   }
   function renderChips() {
     const el = $('#libChips'); if (!el) return;
     const toks = TG.tokenize(L.query);
     if (!toks.length) { el.innerHTML = ''; el.classList.remove('show'); return; }
     el.classList.add('show');
+    const scope = L.cwd ? '<span class="q-scope">in <b>' + esc(E.basename(L.cwd)) + '</b> <a class="mod-link" data-lib="search-everywhere" tabindex="0">search everywhere</a></span>' : '';
     const q = L.query.trim();
     const saved = (tagState().saved || []).some(s => s.query.trim() === q);
     el.innerHTML = toks.map((t, i) => {
@@ -242,7 +344,7 @@
       const label = isTag ? t.replace(/^(-?)(tags?:)/i, '$1#') : t;
       return '<span class="q-chip' + (isTag ? ' is-tag' : '') + (t.startsWith('-') ? ' is-not' : '') + '"' + (isTag ? ' style="--tc:' + tagColor(TG.normTag(label.replace(/^-/, ''))) + '"' : '') + '>' + esc(label) +
         '<button data-lib="drop-token" data-i="' + i + '" aria-label="Remove ' + esc(label) + '">' + icon('x', 'xs') + '</button></span>';
-    }).join('') +
+    }).join('') + scope +
       '<span class="spacer"></span>' + (saved ? '<span class="muted small">' + icon('bookmark', 'xs') + 'Saved</span>' : '<a class="mod-link" data-lib="save-search" tabindex="0">' + icon('bookmark', 'xs') + 'Save search</a>') +
       '<a class="mod-link" data-lib="clear" tabindex="0">Clear</a>';
   }
@@ -264,10 +366,13 @@
   }
   function renderFoot() {
     const el = $('#libFoot'); if (!el) return;
-    const total = L.files.reduce((a, f) => a + f.size, 0);
+    const total = L.files.reduce((a, f) => a + f.size, 0) + L.dirs.reduce((a, d) => a + d.size, 0);
     const all = V().files.length;
-    let h = '<span>' + (L.files.length === all ? plural(all, 'file') : L.files.length + ' of ' + plural(all, 'file')) + ' · ' + C.fmt(total) + '</span>';
-    if (L.sel.size) { const s = selFiles(); h += '<span class="lf-sel">' + plural(s.length, 'file') + ' selected · ' + C.fmt(s.reduce((a, f) => a + f.size, 0)) + '</span>'; }
+    let h;
+    if (browsing()) h = '<span>' + (L.dirs.length ? plural(L.dirs.length, 'folder') + ' · ' : '') + plural(L.files.length, 'file') + ' · ' + C.fmt(total) + '</span>';
+    else h = '<span>' + (L.files.length === all ? plural(all, 'file') : L.files.length + ' of ' + plural(all, 'file')) + ' · ' + C.fmt(total) + '</span>';
+    const sf = selFiles();
+    if (sf.length) h += '<span class="lf-sel">' + plural(sf.length, 'file') + ' selected · ' + C.fmt(sf.reduce((a, f) => a + f.size, 0)) + '</span>';
     const tagged = V().files.filter(f => tagsOf(f.path).length).length;
     h += '<span class="spacer"></span><span class="muted">' + tagged + ' tagged</span>';
     el.innerHTML = h;
@@ -315,6 +420,8 @@
     if (r.t === 'tiles') {
       return '<div class="lib-tiles" style="top:' + y + 'px;grid-template-columns:repeat(' + L.cols + ',minmax(0,1fr))">' + r.files.map(f => {
         const sel = L.sel.has(f.path), foc = L.focus === f.path;
+        if (f.isDir) return '<div class="lib-tile is-dir' + (sel ? ' is-selected' : '') + (foc ? ' is-focus' : '') + '" data-path="' + esc(f.path) + '" data-dir="1" role="option" aria-selected="' + sel + '" title="' + esc(f.path) + '">' +
+          '<div class="lt-thumb lt-folder">' + icon('folder') + '</div><div class="lt-name">' + esc(f.name) + '</div><div class="lt-meta"><span>' + (f.opaque ? 'not scanned' : plural(f.count, 'file')) + '</span></div></div>';
         const tags = tagsOf(f.path);
         return '<div class="lib-tile' + (sel ? ' is-selected' : '') + (foc ? ' is-focus' : '') + '" data-path="' + esc(f.path) + '" draggable="true" role="option" aria-selected="' + sel + '" title="' + esc(f.path) + '">' +
           thumbHTML(f, 200, 'lt-thumb') + '<div class="lt-name">' + esc(f.name) + '</div>' +
@@ -323,6 +430,15 @@
     }
     const f = r.f;
     const sel = L.sel.has(f.path), foc = L.focus === f.path;
+    if (f.isDir) {
+      const pd = E.dirname(f.path);
+      return '<div class="lib-row is-dir' + (sel ? ' is-selected' : '') + (foc ? ' is-focus' : '') + '" style="top:' + y + 'px" data-path="' + esc(f.path) + '" data-dir="1" role="option" aria-selected="' + sel + '">' +
+        '<div class="lr-name">' + icon('folder') + '<span class="lr-base">' + esc(f.name) + '</span></div>' +
+        '<div class="lr-tags"><span class="lr-count">' + (f.opaque ? 'not scanned' : plural(f.count, 'file') + (f.sub ? ', ' + plural(f.sub, 'folder') : '')) + '</span></div>' +
+        '<div class="lr-folder" title="' + esc(pd || 'Top level') + '">' + (pd ? esc(pd) : '<span class="muted">—</span>') + '</div>' +
+        '<div class="lr-date"' + (f.lastModified ? ' title="' + esc(fullDate(f.lastModified)) + '"' : '') + '>' + (f.lastModified ? esc(ago(f.lastModified)) : '<span class="muted">—</span>') + '</div>' +
+        '<div class="lr-size">' + (f.count ? C.fmt(f.size) : '') + '</div></div>';
+    }
     const { base, ext } = splitName(f.name);
     const tags = tagsOf(f.path), auto = new Set(autoOf(f.path));
     const dir = E.dirname(f.path);
@@ -344,8 +460,8 @@
     canvas.style.height = L.total + 'px';
     if (!L.rows.length) {
       const v = V();
-      const empty = !v.files.length ? 'This folder is empty.' : 'No files match <b>' + esc(L.query) + '</b>.';
-      canvas.innerHTML = '<div class="lib-empty">' + icon('search') + '<div>' + empty + '</div>' + (L.query ? '<button class="btn small" data-lib="clear">Clear search</button>' : '') +
+      const empty = !L.query.trim() ? 'This folder is empty.' : 'No files match <b>' + esc(L.query) + '</b>' + (L.cwd ? ' in ' + esc(E.basename(L.cwd)) + '. <a class="mod-link" data-lib="search-everywhere">Search everywhere</a>' : '.');
+      canvas.innerHTML = '<div class="lib-empty">' + icon(L.query.trim() ? 'search' : 'folder-open') + '<div>' + empty + '</div>' + (L.query ? '<button class="btn small" data-lib="clear">Clear search</button>' : '') +
         (L.query ? '<div class="lib-help">Search tips: <code>#invoice</code> <code>-#draft</code> <code>type:pdf,docx</code> <code>kind:image</code> <code>size:&gt;50mb</code> <code>modified:&lt;30d</code> <code>modified:2024</code> <code>in:Documents</code> <code>is:untagged</code> <code>is:duplicate</code></div>' : '') + '</div>';
       return;
     }
@@ -364,6 +480,21 @@
     const keepFocus = prevInput && document.activeElement === prevInput;
     const files = selFiles();
     let h = '';
+    const selDir = !files.length && L.sel.size === 1 ? dirBy([...L.sel][0]) : null;
+    if (selDir) {
+      const inside = V().files.filter(f => f.path.toLowerCase().startsWith(selDir.path.toLowerCase() + '/'));
+      const counts = new Map();
+      for (const f of inside) for (const t of tagsOf(f.path)) counts.set(t, (counts.get(t) || 0) + 1);
+      const top = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12);
+      h += '<div class="ld-preview ld-folder">' + icon('folder') + '</div><div class="ld-name">' + esc(selDir.name) + '</div>';
+      h += '<div class="ld-actions"><button class="btn small mod-cta" data-lib="enter">' + icon('folder-open') + 'Open</button><button class="btn small" data-lib="reveal-dir">' + icon('external-link') + 'In Explorer</button></div>';
+      h += '<div class="ld-section ld-props">' + prop('files', 'Files', String(selDir.count)) + prop('folder', 'Folders', String(selDir.sub)) + prop('hard-drive', 'Size', C.fmt(selDir.size)) +
+        (selDir.lastModified ? prop('clock', 'Changed', esc(ago(selDir.lastModified))) : '') + '</div>';
+      if (top.length) h += '<div class="ld-section"><div class="ld-title">Tags inside</div><div class="ld-chips">' + top.map(([t, n]) => chip(t, { count: n, cls: 'is-link' })).join('') + '</div></div>';
+      if (inside.length) h += '<div class="ld-section"><button class="btn small block" data-lib="tag-dir">' + icon('tag') + 'Tag all ' + plural(inside.length, 'file') + ' inside…</button></div>';
+      el.innerHTML = h;
+      return;
+    }
     if (!files.length) {
       const total = L.files.reduce((a, f) => a + f.size, 0);
       const counts = new Map();
@@ -372,7 +503,9 @@
       const kinds = new Map();
       for (const f of L.files) { const k = E.typeGroup(f.extension); kinds.set(k, (kinds.get(k) || 0) + f.size); }
       const kl = [...kinds.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
-      h += '<div class="ld-section"><div class="ld-title">' + (L.query ? 'Results' : 'This folder') + '</div><div class="ld-big">' + plural(L.files.length, 'file') + '</div><div class="muted">' + C.fmt(total) + '</div></div>';
+      const dirsHere = browsing() ? L.dirs : [];
+      const allSize = total + dirsHere.reduce((a, d) => a + d.size, 0);
+      h += '<div class="ld-section"><div class="ld-title">' + (L.query.trim() ? 'Results' : L.cwd ? esc(E.basename(L.cwd)) : 'This folder') + '</div><div class="ld-big">' + (dirsHere.length ? plural(dirsHere.length, 'folder') + ', ' : '') + plural(L.files.length, 'file') + '</div><div class="muted">' + C.fmt(allSize) + (dirsHere.length ? ' including subfolders' : '') + '</div></div>';
       if (kl.length && total) h += '<div class="ld-section"><div class="ld-title">Space by kind</div>' + kl.map(([k, s]) => '<button class="ld-bar" data-lib="query" data-q="kind:' + esc(k === '3D Models' ? '3d' : k.toLowerCase().replace(/s$/, '')) + '"><span class="lb-label">' + esc(k) + '</span><span class="lb-track"><span style="width:' + Math.max(2, Math.round(s / total * 100)) + '%"></span></span><span class="lb-val">' + C.fmt(s) + '</span></button>').join('') + '</div>';
       if (top.length) h += '<div class="ld-section"><div class="ld-title">Tags here</div><div class="ld-chips">' + top.map(([t, n]) => chip(t, { count: n, cls: 'is-link' })).join('') + '</div></div>';
       h += '<div class="ld-section ld-hint">' + icon('mouse-pointer', 'xs') + '<span>Select a file to see details and tag it. <b>Ctrl</b>-click or <b>Shift</b>-click to select several.</span></div>';
@@ -388,7 +521,7 @@
       h += '<div class="ld-actions"><button class="btn small mod-cta" data-lib="open">' + icon('external-link') + 'Open</button><button class="btn small" data-lib="reveal">' + icon('folder-open') + 'Show in folder</button><button class="clickable-icon" data-lib="copy" aria-label="Copy path" data-tip="Copy path">' + icon('copy') + '</button></div>';
       h += '<div class="ld-section"><div class="ld-title">Tags</div><div class="ld-chips">' + (tags.length ? tags.map(t => chip(t, { auto: auto.has(t), x: true, tip: true })).join('') : '<span class="muted small">No tags yet</span>') + '</div>' + tagInput() + '</div>';
       h += '<div class="ld-section ld-props">' +
-        prop('folder', 'Folder', E.dirname(f.path) ? '<a class="mod-link" data-lib="query" data-q="in:&quot;' + esc(E.dirname(f.path)) + '&quot;">' + esc(E.dirname(f.path)) + '</a>' : 'Top level') +
+        prop('folder', 'Folder', '<a class="mod-link" data-lib="go" data-p="' + esc(E.dirname(f.path)) + '" data-sel="' + esc(f.path) + '">' + esc(E.dirname(f.path) || V().vaultName) + '</a>') +
         prop('file', 'Kind', esc(E.typeFolder(f.extension).replace('/', ' · ')) + (f.extension ? ' <span class="muted">.' + esc(f.extension) + '</span>' : '')) +
         prop('hard-drive', 'Size', C.fmt(f.size)) +
         prop('clock', 'Modified', '<span title="' + esc(fullDate(f.lastModified)) + '">' + esc(ago(f.lastModified)) + '</span>') +
@@ -463,7 +596,13 @@
   function setSingle(path) { L.sel = new Set([path]); L.focus = path; L.anchor = path; afterSelect(); }
   function afterSelect(scroll) {
     if (scroll !== false && L.focus) ensureVisible(L.focus);
-    paint(); renderFoot(); renderDetails();
+    // update highlight in place: replacing the rows would break double-click (both clicks must hit the same element)
+    const canvas = $('#libCanvas');
+    if (canvas) canvas.querySelectorAll('[data-path]').forEach(el => {
+      const p = el.dataset.path, sel = L.sel.has(p);
+      el.classList.toggle('is-selected', sel); el.classList.toggle('is-focus', L.focus === p); el.setAttribute('aria-selected', sel);
+    });
+    renderFoot(); renderDetails();
   }
   function indexOfPath(p) { return (L.order || L.files).findIndex(f => f.path === p); }
   function ensureVisible(path) {
@@ -509,6 +648,7 @@
   function onDblClick(e) {
     const r = e.target.closest('.lib-row, .lib-tile');
     if (!r) return;
+    if (r.dataset.dir) { go(r.dataset.path); return; }
     if (U().dblClick === 'reveal') reveal(r.dataset.path); else openFile(r.dataset.path);
   }
   function onContext(e) {
@@ -518,9 +658,11 @@
     if (!r) return;
     e.preventDefault(); e.stopPropagation();
     if (!L.sel.has(r.dataset.path)) { L.sel = new Set([r.dataset.path]); L.focus = r.dataset.path; L.anchor = r.dataset.path; afterSelect(false); }
+    if (r.dataset.dir) { C.showMenu(dirMenuItems(r.dataset.path), e.clientX, e.clientY); return; }
     C.showMenu(fileMenuItems(), e.clientX, e.clientY);
   }
   function onKey(e) {
+    const mod = e.ctrlKey || e.metaKey;
     const list = L.order || L.files;
     if (!list.length) return;
     const grid = U().view === 'grid';
@@ -536,6 +678,7 @@
     else if (k === 'End') next = list.length - 1;
     else if (k === 'PageDown') next = Math.min(list.length - 1, Math.max(0, i) + Math.floor(($('#libScroll').clientHeight / (grid ? TILE_H : ROW))) * step);
     else if (k === 'PageUp') next = Math.max(0, Math.max(0, i) - Math.floor(($('#libScroll').clientHeight / (grid ? TILE_H : ROW))) * step);
+    if (e.altKey) return;      // Alt+arrows are back / forward / up
     if (next != null) {
       e.preventDefault(); e.stopPropagation();
       const p = list[next].path;
@@ -548,10 +691,10 @@
       afterSelect();
       return;
     }
-    const mod = e.ctrlKey || e.metaKey;
     if (mod && k.toLowerCase() === 'a') { e.preventDefault(); e.stopPropagation(); L.sel = new Set(L.files.map(f => f.path)); afterSelect(false); return; }
     if (k === ' ' && L.focus && mod) { e.preventDefault(); if (L.sel.has(L.focus)) L.sel.delete(L.focus); else L.sel.add(L.focus); afterSelect(false); return; }
-    if (k === 'Enter' && L.focus) { e.preventDefault(); e.stopPropagation(); if (e.shiftKey) reveal(L.focus); else openFile(L.focus); return; }
+    if (k === 'Enter' && L.focus) { e.preventDefault(); e.stopPropagation(); if (dirBy(L.focus) && !fileBy(L.focus)) go(L.focus); else if (e.shiftKey) reveal(L.focus); else openFile(L.focus); return; }
+    if (k === 'Backspace' && !mod) { e.preventDefault(); e.stopPropagation(); back(); return; }
     if (k === 'Escape') { if (L.sel.size) { e.preventDefault(); e.stopPropagation(); L.sel.clear(); afterSelect(false); } return; }
     if (k === '#' || (k === '3' && e.shiftKey)) { e.preventDefault(); tagEditor(); return; }
     if (k === 'ContextMenu' || (k === 'F10' && e.shiftKey)) {
@@ -571,8 +714,9 @@
   function onDragStart(e) {
     const r = e.target.closest('.lib-row, .lib-tile');
     if (!r) return;
+    if (r.dataset.dir) { e.preventDefault(); return; }
     if (!L.sel.has(r.dataset.path)) { L.sel = new Set([r.dataset.path]); L.focus = r.dataset.path; afterSelect(false); }
-    const paths = [...L.sel];
+    const paths = [...L.sel].filter(p => fileBy(p));
     e.dataTransfer.setData('application/x-onyx-files', JSON.stringify(paths));
     e.dataTransfer.setData('text/plain', paths.join('\n'));
     e.dataTransfer.effectAllowed = 'copyLink';
@@ -590,6 +734,15 @@
     const u = U();
     if (name === 'clear') { L.query = ''; const i = $('#libSearch'); if (i) { i.value = ''; i.focus(); } refresh(); }
     else if (name === 'mode') setPref('view', el.dataset.v);
+    else if (name === 'browse') { L.query = L.query; cache = null; setPref('browse', el.dataset.v); }
+    else if (name === 'go') go(el.dataset.p || '', { select: el.dataset.sel || null });
+    else if (name === 'back') back();
+    else if (name === 'forward') forward();
+    else if (name === 'up') up();
+    else if (name === 'enter') { const d = [...L.sel][0]; if (d) go(d); }
+    else if (name === 'reveal-dir') { const d = [...L.sel][0]; if (d) revealDir(d); }
+    else if (name === 'tag-dir') { const d = [...L.sel][0]; if (d) tagEditor(filesInside(d)); }
+    else if (name === 'search-everywhere') { const q = L.query; L.hist.push(L.cwd); L.fwd = []; L.cwd = ''; L.query = q; refresh(); renderTagsPanel(); }
     else if (name === 'details') setPref('details', !u.details);
     else if (name === 'sort') { if (u.sort === el.dataset.k) setPref('dir', u.dir === 'asc' ? 'desc' : 'asc'); else { C.setUi('library', 'dir', el.dataset.k === 'name' || el.dataset.k === 'folder' || el.dataset.k === 'type' ? 'asc' : 'desc'); setPref('sort', el.dataset.k); } }
     else if (name === 'sort-menu') {
@@ -643,10 +796,11 @@
     if (toks.some(isTag)) next = toks.filter(t => !isTag(t));
     else if (additive) next = toks.concat(['#' + tag]);
     else next = toks.filter(t => !/^-?(#|tags?:)/i.test(t)).concat(['#' + tag]);
+    if (L.cwd) { L.hist.push(L.cwd); L.fwd = []; L.cwd = ''; }
     L.query = next.join(' ');
     showLibrary();
   }
-  function setQuery(q) { L.query = q; showLibrary(); }
+  function setQuery(q) { if (L.cwd) { L.hist.push(L.cwd); L.fwd = []; L.cwd = ''; } L.query = q; showLibrary(); }
   function showLibrary() {
     if (!C.WS.isVisible('library')) C.WS.activate('library');
     const sc = $('#libScroll'); if (sc) sc.scrollTop = 0;
@@ -673,12 +827,27 @@
     if (one) {
       items.push({ label: 'Show in Files tree', icon: 'files', action: () => { C.WS.activate('files'); C.select(one.path, 'graph'); } });
       const d = E.dirname(one.path);
-      if (d) items.push({ label: 'Everything in this folder', icon: 'folder', action: () => setQuery('in:"' + d + '"') });
+      if (L.query || L.cwd !== d) items.push({ label: 'Open its folder', icon: 'folder-open', action: () => go(d, { select: one.path }) });
       items.push({ label: 'More like this', icon: 'search', sub: '.' + (one.extension || '?'), action: () => setQuery(one.extension ? 'type:' + one.extension : 'kind:other') });
     }
     return items;
   }
   function hk(k) { return k; }
+  function filesInside(d) { const low = d.toLowerCase() + '/'; return V().files.filter(f => f.path.toLowerCase().startsWith(low)).map(f => f.path); }
+  function revealDir(d) { if (V().demo) { C.notice('The demo vault only exists in memory.', 'warn', 2500); return; } C.api.reveal(d); }
+  function dirMenuItems(d) {
+    const n = filesInside(d).length;
+    return [
+      { label: 'Open', icon: 'folder-open', sub: 'Enter', action: () => go(d) },
+      { label: 'Show in system explorer', icon: 'external-link', action: () => revealDir(d) },
+      { label: 'Copy path', icon: 'copy', action: () => { const v = V(); C.api.copyText(v.rootPath ? v.rootPath.replace(/[\\/]+$/, '') + (v.rootPath.includes('\\') ? '\\' + d.replace(/\//g, '\\') : '/' + d) : d); C.notice('Copied path', 'success', 1800); } },
+      'sep',
+      { label: 'Search in this folder', icon: 'search', action: () => { go(d); const i = $('#libSearch'); if (i) i.focus(); } },
+      { label: 'Every file inside, in one list', icon: 'files', action: () => { go(d); setPref('browse', 'flat'); } },
+      { label: 'Tag all ' + plural(n, 'file') + ' inside…', icon: 'tag', action: () => tagEditor(filesInside(d)) },
+      { label: 'Suggest tags for these with AI', icon: 'sparkles', action: () => autoTag('ai', { paths: filesInside(d) }) },
+    ];
+  }
   async function clearAuto(paths) {
     const view = await C.api.tagsClearAuto(paths || null);
     V().tags = view; changed();
@@ -857,7 +1026,7 @@
         '<div class="tp-cta-row"><button class="btn small mod-cta" data-tp="ai">Tag with AI</button><button class="btn small" data-tp="rules">Offline</button></div></div>';
     }
     h += '<div class="tp-section"><div class="tp-title">Library</div>' +
-      item('library', 'All files', '', v.files.length) +
+      '<div class="tp-item' + (!q && !L.cwd ? ' is-active' : '') + '" data-tp="home" tabindex="0" role="button">' + icon('folder-open') + '<span class="tp-label">Browse folders</span><span class="tp-count">' + v.files.length + '</span></div>' +
       item('clock', 'Changed this week', 'modified:<7d', v.files.filter(f => now - f.lastModified <= 7 * DAY).length) +
       item('inbox', 'Untagged', 'is:untagged', untagged) +
       item('copy', 'Duplicates', 'is:duplicate', dupSet().size) +
@@ -903,6 +1072,7 @@
       if (k === 'auto') autoTagMenu(b);
       else if (k === 'quick') quickFind();
       else if (k === 'library') showLibrary();
+      else if (k === 'home') { showLibrary(); go(''); }
       else if (k === 'sort') { C.setUi('library', 'tagSort', U().tagSort === 'name' ? 'count' : 'name'); renderTagsPanel(); }
       else if (k === 'ai') autoTag('ai', { scope: 'untagged' });
       else if (k === 'rules') autoTag('rules', { scope: 'all' });
@@ -1007,9 +1177,7 @@
       const p = s.f.path;
       if (how === 'open') { openFile(p); return; }
       if (how === 'reveal') { reveal(p); return; }
-      if (!L.files.some(f => f.path === p)) L.query = '';
-      showLibrary();
-      setSingle(p);
+      revealFile(p);
       const sc = $('#libScroll'); if (sc) sc.focus({ preventScroll: true });
     }
     let qt = null;
@@ -1031,7 +1199,8 @@
     C.api.onTagProgress(p => { if (L.run) { L.run.batch = p.batch; L.run.of = p.of; renderProgress(); renderTagsPanel(); } });
   }
   window.OnyxLibrary = {
-    init, renderLibrary, renderTagsPanel, refresh, quickFind, tagEditor, autoTag, autoTagMenu, saveSearch, setQuery, showLibrary,
+    init, renderLibrary, renderTagsPanel, refresh, quickFind, go, back, forward, up, revealFile,
+    get cwd() { return L.cwd; }, tagEditor, autoTag, autoTagMenu, saveSearch, setQuery, showLibrary,
     tagColor, tagsOf, clearAuto,
     get selection() { return [...L.sel]; },
     get query() { return L.query; },
