@@ -5,7 +5,7 @@
   // ------------------------------------------------------------------ presets
   // Each preset: base surfaces + text + default accent. Everything else is derived.
   const PRESETS = {
-    onyx:     { name: 'Onyx',     mode: 'dark',  desc: 'Black stone, polished silver', bg: '#0f0f11', bg2: '#161619', alt: '#1f1f23', border: '#25252a', strong: '#34343b', text: '#e6e6ea', muted: '#a3a4ad', faint: '#62636c', accent: '#d7dae2' },
+    onyx:     { name: 'Onyx',     mode: 'dark',  desc: 'Black stone, periwinkle accent', bg: '#0f0f11', bg2: '#161619', alt: '#1f1f23', border: '#25252a', strong: '#34343b', text: '#e6e6ea', muted: '#a3a4ad', faint: '#6c6d77', accent: '#8f9cf9' },
     jet:      { name: 'Jet',      mode: 'dark',  desc: 'Pure black for OLED screens',  bg: '#000000', bg2: '#0a0a0b', alt: '#151517', border: '#1e1e21', strong: '#2c2c30', text: '#ededf0', muted: '#9e9ea6', faint: '#5d5d64', accent: '#ffffff' },
     graphite: { name: 'Graphite', mode: 'dark',  desc: 'Softer grey, steel accent',     bg: '#1b1c1f', bg2: '#222327', alt: '#2b2c31', border: '#323339', strong: '#42434a', text: '#e3e4e8', muted: '#a9aab2', faint: '#6c6d76', accent: '#9fb4d8' },
     lapis:    { name: 'Lapis',    mode: 'dark',  desc: 'Deep navy, sapphire accent',    bg: '#0c1016', bg2: '#111722', alt: '#19212e', border: '#202a39', strong: '#2c394d', text: '#e1e8f2', muted: '#9daabd', faint: '#5d697c', accent: '#6ea8ff' },
@@ -13,7 +13,7 @@
     amber:    { name: 'Amber',    mode: 'dark',  desc: 'Warm brown-black, honey accent', bg: '#12100d', bg2: '#191612', alt: '#231f19', border: '#2b2520', strong: '#3a322b', text: '#eee6dc', muted: '#b2a797', faint: '#706759', accent: '#e0a458' },
     garnet:   { name: 'Garnet',   mode: 'dark',  desc: 'Wine-black, garnet accent',     bg: '#120e0f', bg2: '#191415', alt: '#231b1d', border: '#2c2124', strong: '#3b2c30', text: '#f0e4e6', muted: '#b49ea3', faint: '#725b60', accent: '#f2737d' },
     amethyst: { name: 'Amethyst', mode: 'dark',  desc: 'Violet-black, amethyst accent', bg: '#110f15', bg2: '#17141d', alt: '#201c28', border: '#282332', strong: '#372f45', text: '#ebe6f2', muted: '#aaa1b8', faint: '#686075', accent: '#a98bf5' },
-    pearl:    { name: 'Pearl',    mode: 'light', desc: 'Clean white, onyx-black accent', bg: '#fbfbfc', bg2: '#f2f2f5', alt: '#e8e8ed', border: '#e0e0e6', strong: '#cbcbd4', text: '#1b1b1f', muted: '#585962', faint: '#8d8e98', accent: '#2a2c33' },
+    pearl:    { name: 'Pearl',    mode: 'light', desc: 'Clean white, indigo accent', bg: '#fbfbfc', bg2: '#f2f2f5', alt: '#e8e8ed', border: '#e0e0e6', strong: '#cbcbd4', text: '#1b1b1f', muted: '#585962', faint: '#80818b', accent: '#4b57d6' },
     marble:   { name: 'Marble',   mode: 'light', desc: 'Warm white, bronze accent',     bg: '#faf8f5', bg2: '#f2eee8', alt: '#e9e3da', border: '#e2dbd0', strong: '#cfc5b6', text: '#2a2520', muted: '#685e54', faint: '#998f84', accent: '#9a6b3f' },
     quartz:   { name: 'Quartz',   mode: 'light', desc: 'Cool white, cobalt accent',     bg: '#f7f9fc', bg2: '#eef2f8', alt: '#e3e9f2', border: '#dae1eb', strong: '#c5cedc', text: '#17202c', muted: '#4f5c70', faint: '#8693a6', accent: '#2f6fe4' },
     sage:     { name: 'Sage',     mode: 'light', desc: 'Soft green-grey, forest accent', bg: '#f8faf8', bg2: '#eef2ee', alt: '#e3e9e3', border: '#dae1da', strong: '#c3cdc3', text: '#1b241d', muted: '#536056', faint: '#88958b', accent: '#2f7d4f' },

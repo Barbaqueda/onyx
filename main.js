@@ -163,7 +163,7 @@ function locationName(p) {
 
 function vaultPayload() {
   return {
-    vaultName: scan.demo ? 'Demo vault' : locationName(scan.root),
+    vaultName: scan.demo ? 'Demo folder' : locationName(scan.root),
     rootPath: scan.root, demo: scan.demo, browse: !!scan.browse, browseReason: scan.reason || '',
     files: scan.files, dirs: scan.dirs, skipped: scan.skipped,
     undo: (() => { const h = scan.demo ? null : lastHistory(scan.root); return h ? { at: h.at, count: h.moves.length } : null; })(),
@@ -459,9 +459,15 @@ function demoVault() {
 // IPC
 // ============================================================================
 ipcMain.handle('pick-folder', async () => {
-  const r = await dialog.showOpenDialog(mainWindow, { properties: ['openDirectory'], title: 'Open folder as vault' });
+  const r = await dialog.showOpenDialog(mainWindow, { properties: ['openDirectory'], title: 'Open a folder' });
   if (r.canceled || !r.filePaths.length) return { cancelled: true };
   return loadFolder(r.filePaths[0]);
+});
+ipcMain.handle('recent-remove', async (e, folder) => {
+  const s = loadSettings();
+  s.ui.recent = (s.ui.recent || []).filter(x => x !== folder);
+  writeJson(SETTINGS_FILE(), s);
+  return s.ui.recent;
 });
 ipcMain.handle('open-recent', async (e, folder) => {
   if (!fs.existsSync(folder)) return { error: 'That folder no longer exists.' };
@@ -513,7 +519,7 @@ ipcMain.handle('organize', async (event, strategy) => {
 ipcMain.handle('apply-plan', async (event, items) => {
   if (scan.browse) return { error: BROWSE_ONLY };
   quiet(5000);
-  if (scan.demo) return { error: 'This is the demo vault — nothing to move. Open a real folder to apply changes.' };
+  if (scan.demo) return { error: 'This is the demo folder, so there is nothing to move. Open a real folder to apply changes.' };
   if (!scan.root) return { error: 'No folder open' };
   const r = applyPlan(scan.root, items);
   if (tagDb) TG.applyMoves(tagDb, r.moves);
@@ -838,7 +844,7 @@ ipcMain.handle('list-places', async () => {
 
 const EXEC_EXT = /\.(exe|msi|bat|cmd|com|ps1|vbs|vbe|js|jse|wsf|wsh|scr|pif|lnk|reg|hta|cpl|jar|msix|appx)$/i;
 ipcMain.handle('open-file', async (e, rel) => {
-  if (scan.demo) return { error: 'The demo vault only exists in memory, so there is nothing to open.' };
+  if (scan.demo) return { error: 'The demo folder only exists in memory, so there is nothing to open.' };
   const full = insideRoot(rel);
   if (!full || full === path.resolve(scan.root)) return { error: 'That file isn\'t in this folder.' };
   if (!fs.existsSync(full)) return { error: 'That file no longer exists. Reload the folder.' };
@@ -876,7 +882,7 @@ ipcMain.handle('file-thumb', async (e, { rel, size }) => {
 // ============================================================================
 const FO = require('./fileops');
 const WSH = require('./winshell');
-const DEMO_ONLY = 'The demo vault only exists in memory, so there are no real files to change. Open a real folder to do that.';
+const DEMO_ONLY = 'The demo folder only exists in memory, so there are no real files to change. Open a real folder to do that.';
 const opsUndo = [];                      // this session's file operations, newest last (like Explorer's Ctrl+Z)
 let opRun = null;                        // the paste in progress (for Cancel)
 let clipboardFallback = { files: [], effect: 'copy' };    // when Windows' clipboard isn't available

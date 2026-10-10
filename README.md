@@ -78,7 +78,7 @@ flowchart LR
 | --- | --- |
 | **Scan** | Onyx reads the folder: file names, types, sizes and dates, plus the folders already there. |
 | **Plan** | It proposes where every file should go, reusing your folders wherever it can. |
-| **Review** | You see the result three ways: a proposed folder tree, a checklist of every move, and a live graph. Right-click anything to move it, keep it, or turn it into a rule. |
+| **Review** | Everything happens on one Organize screen: pick a way to sort, make a plan, then see it as the new folders or as every single move (or explore it as a graph). Right-click anything to move it, keep it, or turn it into a rule. |
 | **Apply** | Only the moves you left checked happen. Name clashes become `file (2).pdf`; nothing is ever overwritten. |
 | **Undo** | Every apply writes a journal. One click restores everything exactly as it was. |
 
@@ -86,7 +86,7 @@ flowchart LR
 
 ## 🏷 Library &amp; tags
 
-The **Library** is a file explorer that also understands tags. Browse folder by folder like Windows Explorer, with a clickable address bar, Back / Forward / Up (<kbd>Alt</kbd> <kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd>, <kbd>Backspace</kbd>, or your mouse's side buttons), double-click to open, and folder sizes at a glance. Or switch to **All files** and see everything inside a folder in one list. Searching looks through the current folder and everything in it: type a name, click a tag, or combine filters like `#invoice type:pdf modified:2024`. Clicking a folder in the Files tree opens it here, just like Explorer's navigation pane.
+The **Library** is a file explorer that also understands tags. Browse folder by folder like Windows Explorer, with a clickable address bar, Back / Forward / Up (<kbd>Alt</kbd> <kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd>, <kbd>Backspace</kbd>, or your mouse's side buttons), double-click to open, and folder sizes at a glance. Or switch to **All files** and see everything inside a folder in one list. Searching looks through the current folder and everything in it: type a name, click a tag, or combine filters like `#invoice type:pdf modified:2024`. Clicking a folder in the Folders pane opens it here, just like Explorer's navigation pane, and <b>This PC</b> shows your recent folders, drives and the usual places on one page.
 
 **Browse whole drives.** Open *This PC* to explore `C:\`, any other drive, your user folder or Program Files, folder by folder, the way Explorer does. Folders load as you open them, so even a full drive is instant, and search looks through everything below where you are. These locations are **browse-only**: you can search, preview, open and tag anything, but Onyx refuses to reorganize a drive or system folder. When you want to tidy something, right-click a folder and choose **Organize this folder**.
 
@@ -183,7 +183,7 @@ Folders that work as one piece **stay together**: a website (HTML plus its JS an
 </tr>
 <tr>
 <td colspan="2">
-<img src="docs/overview.png" alt="Overview of a folder: Onyx can sort 32 files, keeps 3 bundles together" width="100%">
+<img src="docs/overview.png" alt="The Organize screen: choose how to sort, then make a plan to review" width="100%">
 </td>
 </tr>
 </table>
@@ -338,7 +338,7 @@ File names, sizes and dates, plus the list of tags you already use, to the AI pr
 <details>
 <summary><b>Can I try it without touching my files?</b></summary>
 <br>
-Yes. Click the flask icon in the ribbon to open the <b>demo vault</b>: a realistic messy folder that only exists in memory.
+Yes. On the start screen, click <b>Try the demo</b>: a realistic messy folder that only exists in memory.
 </details>
 
 <details>

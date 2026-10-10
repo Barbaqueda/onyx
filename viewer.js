@@ -5,7 +5,10 @@
   'use strict';
   let C = null, LIB = null;
   const X = () => window.OnyxExtensions;
-  const V = { el: null, path: null, list: [], ctl: null, viewer: null, token: 0, tools: [], info: '' };
+  const V = { el: null, path: null, list: [], ctl: null, viewer: null, token: 0, tools: [], info: '', docked: false };
+  const pref = (k, v) => { try { if (v === undefined) return localStorage.getItem('onyx.viewer.' + k); localStorage.setItem('onyx.viewer.' + k, v); } catch { return null; } return null; };
+  V.docked = pref('docked') === '1';
+  const thumbs = new Map();
   const esc = s => C.esc(s);
   const icon = (n, c) => C.icon(n, c);
   const url = f => (C.api.fileUrl ? C.api.fileUrl(f.path, Math.round(f.lastModified || 0)) : '');
@@ -34,26 +37,44 @@
   function open(path) {
     const vault = C.S.vault;
     if (!vault) return;
-    if (vault.demo) { C.notice('The demo vault only exists in memory, so there’s nothing to show. Open a real folder to preview files.', 'warn', 4000); return; }
+    if (vault.demo) { C.notice('The demo folder only exists in memory, so there’s nothing to show. Open a real folder to preview files.', 'warn', 4000); return; }
     const f = LIB.fileBy(path);
     if (!f) return;
     if (!C.WS.isVisible('library')) C.WS.activate('library');
-    const host = document.querySelector('#vs-library .lib');
+    const host = document.querySelector(V.docked ? '#vs-library .lib-body' : '#vs-library .lib');
     if (!host) return;
     V.list = LIB.previewList().map(x => x.path);
     if (!V.list.includes(path)) V.list = [path];
     if (!V.el) {
       V.el = document.createElement('div');
-      V.el.className = 'viewer';
+      V.el.className = 'viewer' + (V.docked ? ' is-docked' : '');
       V.el.setAttribute('role', 'dialog');
       V.el.setAttribute('aria-label', 'Preview');
       V.el.tabIndex = -1;
-      V.el.innerHTML = '<div class="vw-bar"></div><div class="vw-body"></div>';
+      V.el.innerHTML = '<div class="vw-bar"></div><div class="vw-body"></div><div class="vw-strip" hidden></div>';
       host.appendChild(V.el);
       V.el.addEventListener('click', onClick);
     }
     show(path);
-    V.el.focus({ preventScroll: true });
+    if (!V.docked) V.el.focus({ preventScroll: true });
+  }
+  // docked beside the list: the preview follows whatever you select
+  function follow(path) {
+    if (!V.el || !V.docked || path === V.path || !LIB.fileBy(path)) return;
+    V.list = LIB.previewList().map(x => x.path);
+    if (!V.list.includes(path)) V.list = [path];
+    show(path);
+  }
+  function setDocked(on) {
+    V.docked = !!on; pref('docked', on ? '1' : '0');
+    if (!V.el) return;
+    const host = document.querySelector(on ? '#vs-library .lib-body' : '#vs-library .lib');
+    if (!host) return;
+    host.appendChild(V.el);
+    V.el.classList.toggle('is-docked', V.docked);
+    drawBar(); drawStrip();
+    requestAnimationFrame(() => { if (V.ctl && typeof V.ctl.resize === 'function') { try { V.ctl.resize(); } catch { /* fine */ } } });
+    if (!on) V.el.focus({ preventScroll: true });
   }
   function teardown() {
     if (V.ctl && typeof V.ctl.destroy === 'function') { try { V.ctl.destroy(); } catch (e) { console.warn('[Onyx] extension cleanup failed', e); } }
@@ -65,6 +86,8 @@
     V.token++;
     teardown();
     V.el.remove(); V.el = null; V.path = null;
+    if (stripObs) { stripObs.disconnect(); stripObs = null; }
+    thumbs.clear();
     LIB.focusList();
   }
   function toggle(path) { if (isOpen() && (!path || path === V.path)) close(); else if (path) open(path); }
@@ -83,7 +106,7 @@
     const viewer = X() ? X().viewerFor(f) : null;
     body.className = 'vw-body' + (viewer ? ' vw-' + viewer.ext + ' vw-v-' + viewer.id : '');
     V.viewer = viewer;
-    drawBar();
+    drawBar(); drawStrip();
     if (!viewer) { noPreview(f, body); return; }
     try {
       V.ctl = viewer.render(body, apiFor(f, tok, body)) || null;
@@ -126,7 +149,36 @@
       (tools ? tools + '<span class="cmd-sep"></span>' : '') +
       '<button class="cmd-btn has-label" data-vw="open" data-tip="Open in its own app (Enter)">' + icon('external-link') + '<span>Open</span></button>' +
       b('reveal', 'folder-open', 'Show in File Explorer') +
+      b('dock', V.docked ? 'maximize' : 'columns-2', V.docked ? 'Fill the Library' : 'Show beside the list') +
       b('close', 'x', 'Close (Esc)');
+  }
+  // a strip of the other pictures in this folder
+  let stripObs = null;
+  function drawStrip() {
+    const strip = V.el && V.el.querySelector('.vw-strip');
+    if (!strip) return;
+    const same = V.viewer ? V.list.filter(p => { const f = LIB.fileBy(p); const v = f && X().viewerFor(f); return v && v.ext === V.viewer.ext; }) : [];
+    const on = !V.docked && V.viewer && V.viewer.ext === 'image-viewer' && same.length > 1;
+    strip.hidden = !on;
+    if (!on) { strip.innerHTML = ''; return; }
+    if (strip.dataset.key !== same.join('|')) {
+      strip.dataset.key = same.join('|');
+      if (stripObs) stripObs.disconnect();
+      strip.innerHTML = same.slice(0, 500).map(p => { const f = LIB.fileBy(p); return '<button class="vw-thumb" data-vw-go="' + esc(p) + '" title="' + esc(f.name) + '" aria-label="' + esc(f.name) + '">' + (thumbs.has(p) ? '<img src="' + thumbs.get(p) + '" alt="">' : icon('image')) + '</button>'; }).join('');
+      stripObs = new IntersectionObserver(entries => {
+        for (const en of entries) {
+          if (!en.isIntersecting) continue;
+          const btn = en.target, p = btn.dataset.vwGo;
+          stripObs.unobserve(btn);
+          if (thumbs.has(p)) continue;
+          C.api.thumb(p, 160).then(t => { if (t && t.url && t.kind !== 'icon') { thumbs.set(p, t.url); if (btn.isConnected) btn.innerHTML = '<img src="' + t.url + '" alt="">'; } }).catch(() => {});
+        }
+      }, { root: strip, rootMargin: '0px 300px' });
+      strip.querySelectorAll('.vw-thumb').forEach(b => stripObs.observe(b));
+    }
+    strip.querySelectorAll('.vw-thumb').forEach(b => b.classList.toggle('is-current', b.dataset.vwGo === V.path));
+    const cur = strip.querySelector('.vw-thumb.is-current');
+    if (cur) cur.scrollIntoView({ block: 'nearest', inline: 'center' });
   }
 
   // ------------------------------------------------------------------ commands and keys
@@ -139,10 +191,13 @@
     else if (a === 'open') { if (f) LIB.openFile(f.path); }
     else if (a === 'reveal') { if (f) C.api.reveal(f.path); }
     else if (a === 'enable' && el) { C.setUi('extensions', el.dataset.ext, true); }
+    else if (a === 'dock') setDocked(!V.docked);
   }
   function onClick(e) {
     const t = e.target.closest('[data-tool]');
     if (t && !t.disabled) { const item = V.tools[+t.dataset.tool]; if (item && typeof item.run === 'function') { e.preventDefault(); try { item.run(); } catch (err) { console.warn(err); } } return; }
+    const g = e.target.closest('[data-vw-go]');
+    if (g) { e.preventDefault(); show(g.dataset.vwGo); return; }
     const b = e.target.closest('[data-vw]');
     if (b && !b.disabled) { e.preventDefault(); act(b.dataset.vw, b); }
   }
@@ -151,6 +206,8 @@
     if (document.querySelector('.modal-container, .settings-modal')) return;
     const t = e.target;
     if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
+    // docked beside the list, keys belong to the list unless you're working in the preview
+    if (V.docked && !V.el.contains(document.activeElement)) { if (e.key === 'Escape' && !document.querySelector('.menu')) { e.preventDefault(); e.stopPropagation(); close(); } return; }
     // the extension gets first say (zoom keys, page keys…)
     if (V.ctl && typeof V.ctl.onKey === 'function') { let used = false; try { used = !!V.ctl.onKey(e); } catch { used = false; } if (used) { e.preventDefault(); e.stopPropagation(); return; } }
     const media = t && /^(VIDEO|AUDIO)$/.test(t.tagName);
@@ -189,5 +246,5 @@
     C = ctx; LIB = lib;
     X().onChange(() => { if (V.el && V.path) show(V.path); });
   }
-  window.OnyxViewer = { init, open, close, toggle, canPreview, isOpen, detailsPreview, afterDetails, get path() { return V.path; } };
+  window.OnyxViewer = { init, open, close, toggle, follow, setDocked, canPreview, isOpen, detailsPreview, afterDetails, get path() { return V.path; }, get docked() { return !!(V.el && V.docked); } };
 })();

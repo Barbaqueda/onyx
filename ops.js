@@ -291,60 +291,112 @@
 
   // ------------------------------------------------------------------ menus (Explorer's order)
   const K = k => mod() + k;
+  // Windows 11's order: cut / copy / rename / delete as an icon row, then a short list, then "Show more options"
   function itemMenu() {
     const s = sel();
     const p = s.length === 1 ? s[0] : null;
     const dir = p && isDirPath(p);
-    const items = [];
+    const VW = window.OnyxViewer;
+    const items = [{ iconRow: [
+      { icon: 'scissors', label: 'Cut', sub: K('X'), action: () => toClipboard('move') },
+      { icon: 'copy', label: 'Copy', sub: K('C'), action: () => toClipboard('copy') },
+      ...(dir ? [{ icon: 'clipboard-paste', label: 'Paste into folder', action: () => pasteHere(p) }] : []),
+      { icon: 'pencil', label: 'Rename', sub: 'F2', action: () => startRename() },
+      { icon: 'trash', label: 'Delete', sub: 'Del', danger: true, action: () => del(false) },
+    ] }];
     if (p && dir) {
       items.push({ label: 'Open', icon: 'folder-open', sub: 'Enter', action: () => LI.go(p) });
-      items.push({ label: 'Open in Terminal', icon: 'terminal-square', action: () => simple(C.api.fsTerminal, p) });
       items.push({ label: 'Organize this folder…', icon: 'sparkles', action: () => LI.organizeDir(p) });
     } else if (p) {
-      const VW = window.OnyxViewer;
-      if (VW && VW.canPreview(LI.fileBy(p))) items.push({ label: 'Preview', icon: 'eye' in window.ICONS ? 'eye' : 'search', sub: 'Space', action: () => VW.open(p) });
-      items.push({ label: 'Open', icon: 'external-link', sub: VW && VW.canPreview(LI.fileBy(p)) ? '' : 'Enter', action: () => LI.openFile(p) });
-      if (isWin()) items.push({ label: 'Open with…', icon: 'app-window' in window.ICONS ? 'app-window' : 'external-link', action: () => simple(C.api.fsOpenWith, p) });
+      const can = VW && VW.canPreview(LI.fileBy(p));
+      if (can) items.push({ label: 'Preview', icon: 'eye', sub: 'Space', action: () => VW.open(p) });
+      items.push({ label: 'Open', icon: 'external-link', sub: can ? '' : 'Enter', action: () => LI.openFile(p) });
+      if (isWin()) items.push({ label: 'Open with…', icon: 'app-window', action: () => simple(C.api.fsOpenWith, p) });
       if (isWin() && EXEC.test(p)) items.push({ label: 'Run as administrator', icon: 'shield-check', action: () => simple(C.api.fsRunAdmin, p) });
     } else items.push({ label: 'Open ' + plural(s.filter(x => !isDirPath(x)).length, 'file'), icon: 'external-link', action: () => s.filter(x => !isDirPath(x)).slice(0, 15).forEach(LI.openFile) });
     items.push('sep');
-    items.push({ label: 'Cut', icon: 'scissors', sub: K('X'), action: () => toClipboard('move') });
-    items.push({ label: 'Copy', icon: 'copy', sub: K('C'), action: () => toClipboard('copy') });
-    if (p && dir) items.push({ label: 'Paste into folder', icon: 'clipboard-paste', action: () => pasteHere(p) });
-    items.push({ label: 'Rename', icon: 'pencil', sub: 'F2', action: () => startRename() });
-    items.push({ label: 'Delete', icon: 'trash', sub: 'Del', danger: true, action: () => del(false) });
+    items.push({ label: 'Move to…', icon: 'folder-input', action: () => moveTo() });
+    if (p && !dir && ARCHIVE.test(p)) items.push({ label: 'Extract all', icon: 'folder-output', action: () => simple(C.api.fsExtract, p, 'Extracted <b>' + esc(nameOf(p)) + '</b>') });
+    else items.push({ label: 'Compress to ZIP file', icon: 'archive', action: () => simple(C.api.fsCompress, s, 'Made a ZIP file') });
+    items.push({ label: 'Copy as path', icon: 'link', sub: K('Shift+C'), action: () => copyAsPath() });
+    items.push({ label: dir ? 'Tag files inside' : 'Tags', icon: 'tag', submenu: () => LI.tagItems(p, dir) });
+    items.push({ label: 'More', icon: 'more-horizontal', submenu: () => [
+      ...(p && !dir && ARCHIVE.test(p) ? [{ label: 'Compress to ZIP file', icon: 'archive', action: () => simple(C.api.fsCompress, s, 'Made a ZIP file') }] : []),
+      ...(isWin() ? [{ label: 'Create shortcut', icon: 'file-symlink', action: () => simple(C.api.fsShortcut, s, 'Made a shortcut') }] : []),
+      { label: 'Open in Terminal', icon: 'terminal-square', action: () => simple(C.api.fsTerminal, dir ? p : (E.dirname(p || s[0]) || '')) },
+      { label: 'Show in File Explorer', icon: 'folder-open', action: () => LI.revealPath(p || s[0]) },
+    ] });
     items.push('sep');
-    if (p && !dir && ARCHIVE.test(p)) items.push({ label: 'Extract all', icon: 'folder-output' in window.ICONS ? 'folder-output' : 'folder-open', action: () => simple(C.api.fsExtract, p, 'Extracted <b>' + esc(nameOf(p)) + '</b>') });
-    items.push({ label: 'Compress to ZIP file', icon: 'archive' in window.ICONS ? 'archive' : 'package', action: () => simple(C.api.fsCompress, s, 'Made a ZIP file') });
-    items.push({ label: 'Copy as path', icon: 'link' in window.ICONS ? 'link' : 'copy', sub: K('Shift+C'), action: () => copyAsPath() });
-    if (isWin()) items.push({ label: 'Create shortcut', icon: 'external-link', action: () => simple(C.api.fsShortcut, s, 'Made a shortcut') });
-    items.push({ label: 'Show in File Explorer', icon: 'folder-open', action: () => LI.revealPath(p || s[0]) });
-    items.push('sep');
-    items.push({ label: dir ? 'Tags for files inside…' : 'Tags', icon: 'tag', sub: '›', action: ev => LI.tagMenu(p, dir) });
-    items.push('sep');
-    items.push({ label: 'Properties', icon: 'info' in window.ICONS ? 'info' : 'file', sub: 'Alt+Enter', action: () => properties() });
-    if (isWin()) items.push({ label: 'Show more options', icon: 'more-horizontal' in window.ICONS ? 'more-horizontal' : 'list', sub: 'Windows menu', action: () => shellMenu() });
+    items.push({ label: 'Properties', icon: 'info', sub: 'Alt+Enter', action: () => properties() });
+    if (isWin()) items.push({ label: 'Show more options', icon: 'list', sub: 'Windows menu', action: () => shellMenu() });
     return items;
   }
   function backgroundMenu() {
     const items = [
-      { label: 'View', icon: 'layout-grid', sub: '›', action: () => LI.viewMenu() },
-      { label: 'Sort by', icon: 'arrow-up-down', sub: '›', action: () => LI.sortMenu() },
+      { label: 'View', icon: 'layout-grid', submenu: () => LI.viewItems() },
+      { label: 'Sort by', icon: 'arrow-up-down', submenu: () => LI.sortItems() },
       { label: 'Refresh', icon: 'refresh-cw', sub: 'F5', action: () => LI.reloadNow() },
       'sep',
       { label: 'Paste', icon: 'clipboard-paste', sub: K('V'), action: () => pasteHere() },
     ];
     if (O.undoLabel) items.push({ label: O.undoLabel, icon: 'undo-2', sub: K('Z'), action: undo });
+    items.push({ label: 'New', icon: 'plus', submenu: () => [
+      { label: 'Folder', icon: 'folder-plus', sub: K('Shift+N'), action: () => newItem('folder') },
+      { label: 'Text document', icon: 'file-plus', action: () => newItem('text') },
+    ] });
     items.push('sep',
-      { label: 'New folder', icon: 'folder-plus', sub: K('Shift+N'), action: () => newItem('folder') },
-      { label: 'New text document', icon: 'file-plus' in window.ICONS ? 'file-plus' : 'file', action: () => newItem('text') },
-      'sep',
       { label: 'Select all', icon: 'check', sub: K('A'), action: () => LI.selectAll() },
       { label: 'Open in Terminal', icon: 'terminal-square', action: () => simple(C.api.fsTerminal, LI.cwd()) },
       { label: 'Show in File Explorer', icon: 'folder-open', action: () => LI.revealPath(LI.cwd()) },
       'sep',
-      { label: 'Properties', icon: 'info' in window.ICONS ? 'info' : 'file', sub: 'Alt+Enter', action: () => properties([LI.cwd()]) });
+      { label: 'Properties', icon: 'info', sub: 'Alt+Enter', action: () => properties([LI.cwd()]) });
     return items;
+  }
+  // the "⋯" button in the details pane
+  function detailsMenu() {
+    const s = sel();
+    const p = s.length === 1 ? s[0] : null;
+    const dir = p && isDirPath(p);
+    const items = [];
+    if (p && !dir && isWin()) items.push({ label: 'Open with…', icon: 'app-window', action: () => simple(C.api.fsOpenWith, p) });
+    items.push({ label: 'Show in File Explorer', icon: 'folder-open', action: () => LI.revealPath(p || s[0]) });
+    items.push({ label: s.length > 1 ? 'Copy paths' : 'Copy as path', icon: 'link', action: () => copyAsPath() });
+    if (p) items.push({ label: 'Rename', icon: 'pencil', sub: 'F2', action: () => startRename(p) });
+    if (p) items.push({ label: 'Move to…', icon: 'folder-input', action: () => moveTo() });
+    if (s.length > 1) items.push({ label: 'Compress to ZIP file', icon: 'archive', action: () => simple(C.api.fsCompress, s, 'Made a ZIP file') }, { label: 'Suggest tags from names', icon: 'zap', action: () => window.OnyxLibrary.autoTag('rules', { paths: s.filter(x => !isDirPath(x)) }) });
+    items.push('sep', { label: 'Properties', icon: 'info', sub: 'Alt+Enter', action: () => properties() });
+    if (p) items.push({ label: 'Delete', icon: 'trash', sub: 'Del', danger: true, action: () => del(false) });
+    return items;
+  }
+  // Move to…: pick a folder in this location
+  function moveTo(paths) {
+    if (demoBlock()) return;
+    paths = paths || sel();
+    if (!paths.length) { C.notice('Select files or folders first', 'warn', 2000); return; }
+    const v = V();
+    const dirs = [''].concat(LI.allDirs().filter(d => !paths.some(p => d.toLowerCase() === p.toLowerCase() || d.toLowerCase().startsWith(p.toLowerCase() + '/'))).sort((a, b) => C.collator.compare(a, b)));
+    const m = C.modal({ cls: 'mod-prompt mod-moveto', noClose: true, html: null });
+    m.box.innerHTML = '<div class="prompt-input-container"><div class="prompt-title">Move ' + itemsLabel(paths) + ' to…</div><input class="prompt-input" placeholder="Type to find a folder" spellcheck="false" aria-label="Folder"></div><div class="prompt-results" role="listbox"></div>' +
+      '<div class="prompt-instructions"><span><b>↑↓</b>choose</span><span><b>↵</b>move here</span><span><b>esc</b>cancel</span></div>';
+    const input = m.box.querySelector('input'), list = m.box.querySelector('.prompt-results');
+    let shown = [], at = 0;
+    const draw = () => {
+      const q = input.value.trim().toLowerCase();
+      shown = dirs.filter(d => !q || (d || v.vaultName).toLowerCase().includes(q)).slice(0, 200);
+      at = Math.min(at, Math.max(0, shown.length - 1));
+      list.innerHTML = shown.length ? shown.map((d, i) => '<div class="suggestion-item' + (i === at ? ' is-selected' : '') + '" data-i="' + i + '">' + C.icon(d ? 'folder' : 'hard-drive') + '<span>' + esc(d ? E.basename(d) : v.vaultName) + '</span><span class="note">' + esc(d ? (E.dirname(d) || v.vaultName) : 'top of this location') + '</span></div>').join('') : '<div class="prompt-empty">No folder matches.</div>';
+      const s2 = list.querySelector('.is-selected'); if (s2) s2.scrollIntoView({ block: 'nearest' });
+    };
+    const go = i => { const d = shown[i]; if (d == null) return; m.close(); transfer(paths.map(LI.absPath), d, 'move'); };
+    input.addEventListener('input', () => { at = 0; draw(); });
+    input.addEventListener('keydown', e => {
+      if (e.key === 'ArrowDown') { at = (at + 1) % Math.max(1, shown.length); draw(); e.preventDefault(); }
+      else if (e.key === 'ArrowUp') { at = (at - 1 + shown.length) % Math.max(1, shown.length); draw(); e.preventDefault(); }
+      else if (e.key === 'Enter') { e.preventDefault(); go(at); }
+      else if (e.key === 'Escape') { m.close(); e.preventDefault(); e.stopPropagation(); }
+    });
+    list.addEventListener('click', e => { const it = e.target.closest('[data-i]'); if (it) go(+it.dataset.i); });
+    draw(); input.focus();
   }
   function newMenu(el) {
     const b = el.getBoundingClientRect();
@@ -357,6 +409,8 @@
     const b = el.getBoundingClientRect();
     const s = sel();
     const items = [
+      { label: 'Move to…', icon: 'folder-input', disabled: !s.length, action: () => moveTo() },
+      'sep',
       { label: 'Select all', icon: 'check', sub: K('A'), action: () => LI.selectAll() },
       { label: 'Select none', icon: 'x', action: () => LI.selectPaths([]) },
       { label: 'Invert selection', icon: 'arrow-left-right', action: () => LI.invertSelection() },
@@ -513,7 +567,7 @@
   }
   window.OnyxOps = {
     init, key, itemMenu, backgroundMenu, newMenu, moreMenu, newItem, startRename, toClipboard, pasteHere, transfer, del, undo,
-    properties, shellMenu, copyAsPath, beforePaint, afterPaint, dragStart, apply, refreshUndo,
+    properties, shellMenu, copyAsPath, moveTo, detailsMenu, beforePaint, afterPaint, dragStart, apply, refreshUndo,
     get undoLabel() { return O.undoLabel; }, get dragging() { return !!(O.dragging && Date.now() - O.dragging.at < 120000); }, get op() { return O.op; }, get renaming() { return !!O.rn; },
     hasCut: p => O.cut.has(p),
     cancelOp: () => C.api.fsCancel(),

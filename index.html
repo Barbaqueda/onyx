@@ -15,15 +15,12 @@
       <button class="clickable-icon" data-action="toggle-left" data-tip="Toggle left sidebar" data-cmd="toggle-left" data-icon="panel-left"></button>
     </div>
     <div class="ribbon-actions">
-      <button class="clickable-icon" data-action="open-folder" data-tip="Open folder" data-cmd="open-folder" data-icon="folder-open"></button>
       <button class="clickable-icon" data-action="view-library" data-tip="Library" data-cmd="view-library" data-icon="library"></button>
       <button class="clickable-icon" data-action="places" data-tip="This PC" data-cmd="places" data-icon="monitor"></button>
       <button class="clickable-icon" data-action="quick-find" data-tip="Quick find" data-cmd="quick-find" data-icon="search"></button>
       <button class="clickable-icon" data-action="toggle-organize" data-tip="Organize" data-cmd="view-organize" data-icon="sparkles"></button>
-      <button class="clickable-icon" data-action="view-graph" data-tip="Graph view" data-cmd="view-graph" data-icon="git-fork"></button>
     </div>
     <div class="ribbon-bottom">
-      <button class="clickable-icon" data-action="layout-menu" data-tip="Layout" data-icon="layout-dashboard"></button>
       <button class="clickable-icon" data-action="settings" data-tip="Settings" data-cmd="settings" data-icon="settings"></button>
     </div>
   </aside>
@@ -39,21 +36,11 @@
 <div id="viewStore" hidden>
   <section class="view-root" data-view="files">
     <div class="nav-header">
-      <button class="clickable-icon" data-action="open-folder" data-tip="Open folder" data-icon="folder-plus"></button>
-      <button class="clickable-icon" data-action="toggle-search" data-tip="Search files" data-cmd="search-files" data-icon="search"></button>
-      <button class="clickable-icon" data-action="rescan" data-tip="Reload from disk" data-cmd="rescan" data-icon="refresh-cw"></button>
+      <span class="nav-header-title">Folders</span>
       <button class="clickable-icon" data-action="collapse-explorer" data-tip="Collapse all" data-icon="chevrons-down-up"></button>
-      <button class="clickable-icon" data-action="reveal-root" data-tip="Show in system explorer" data-icon="external-link"></button>
-    </div>
-    <div class="nav-search" id="navSearch">
-      <div class="search-wrap"><span data-icon="search" data-size="xs"></span><input class="search-input" id="explorerFilter" placeholder="Filter files…" aria-label="Filter files" spellcheck="false"></div>
+      <button class="clickable-icon" data-action="reveal-root" data-tip="Show in File Explorer" data-icon="external-link"></button>
     </div>
     <div class="nav-files tree" id="explorer" tabindex="0" role="tree" aria-label="Files"></div>
-    <div class="vault-profile">
-      <button class="vault-switcher" data-action="vault-menu" id="vaultSwitcher"><img src="icon.png" alt=""><span class="name">No vault</span><span data-icon="chevrons-up-down" data-size="xs"></span></button>
-      <button class="clickable-icon" data-action="help" data-tip="Help" data-cmd="help" data-icon="help-circle"></button>
-      <button class="clickable-icon" data-action="settings" data-tip="Settings" data-icon="settings"></button>
-    </div>
   </section>
   <section class="view-root" data-view="organize"><div class="side-content" id="side"></div></section>
   <section class="view-root" data-view="structure"><div class="view-header"><div class="view-header-title" data-title></div><div class="view-actions" data-actions></div></div><div class="view-content" id="vs-structure"></div></section>

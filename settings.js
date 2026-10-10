@@ -53,13 +53,14 @@
     const X = window.OnyxExtensions;
     if (!X) return [];
     const rows = [];
+    const badge = (cls, text) => '<span class="ext-badge ' + cls + '">' + text + '</span>';
     const card = e => {
       const kinds = e.viewers.map(v => v.label).filter(Boolean).join(', ');
-      return esc(e.description || '') + (kinds ? '<div class="ext-meta">' + C.icon(e.icon && e.icon in window.ICONS ? e.icon : 'puzzle', 'xs') + 'Shows: ' + esc(kinds) + ' · v' + esc(e.version) + (e.author ? ' · ' + esc(e.author) : '') + '</div>' : '');
+      return esc(e.description || '') + (kinds ? '<div class="ext-meta">' + (X.isEnabled(e.id) ? badge('on', 'On') : badge('off', 'Off')) + C.icon(e.icon && e.icon in window.ICONS ? e.icon : 'puzzle', 'xs') + 'Shows: ' + esc(kinds) + ' · v' + esc(e.version) + (e.author ? ' · ' + esc(e.author) : '') + '</div>' : '');
     };
     const builtins = X.list().filter(e => e.builtin);
     for (const e of builtins) rows.push({ s: 'extensions', g: 'Built in', k: 'ui.extensions.' + e.id, name: e.name, desc: card(e), kw: 'extension plugin viewer ' + e.viewers.map(v => v.label).join(' '), c: () => ctl.toggle('ui.extensions.' + e.id) });
-    rows.push({ s: 'extensions', g: 'Community extensions', k: 'ui.extensions.community', name: 'Allow community extensions', desc: 'Extensions made by other people, installed in Onyx’s extensions folder (one folder each, with a <code>manifest.json</code>). <b>They run with the same access as Onyx, so they can read and change your files.</b> Only install extensions you trust.', kw: 'plugin third party install community', c: () => ctl.toggle('ui.extensions.community') });
+    rows.push({ s: 'extensions', g: 'Community extensions', k: 'ui.extensions.community', name: 'Allow community extensions', desc: 'Extensions made by other people. <b>They can read and change your files</b>, so only install ones you trust.', kw: 'plugin third party install community', c: () => ctl.toggle('ui.extensions.community') });
     rows.push({ s: 'extensions', g: 'Community extensions', k: 'x.extfolder', name: 'Extensions folder', desc: 'Put each extension in its own folder here, then reload. <code>EXTENSIONS.md</code> in Onyx’s source explains how to make one.', noReset: true, c: () => '<button class="btn" data-x="ext-folder">' + C.icon('folder-open') + 'Open folder</button><button class="btn" data-x="ext-reload">' + C.icon('refresh-cw') + 'Reload</button>' });
     const allowed = !!C.UI().extensions.community;
     const comm = X.community();
@@ -67,7 +68,7 @@
     for (const m of comm) {
       const e = X.get(m.id);
       rows.push({ s: 'extensions', g: 'Community extensions', k: 'ui.extensions.' + m.id, name: m.name, noReset: true, kw: 'extension plugin community',
-        desc: esc(m.description || '') + '<div class="ext-meta">' + C.icon('puzzle', 'xs') + 'v' + esc(m.version) + (m.author ? ' · ' + esc(m.author) : '') + ' · folder <code>' + esc(m.folder) + '</code>' + (e && e.viewers.length ? ' · shows ' + esc(e.viewers.map(v => v.label).join(', ')) : '') + (!allowed ? ' · <b>turn on community extensions first</b>' : '') + '</div>',
+        desc: esc(m.description || '') + '<div class="ext-meta">' + (!allowed ? badge('off', 'Blocked') : !C.UI().extensions[m.id] ? badge('off', 'Off') : e ? badge('on', 'Running') : badge('err', 'Didn’t load')) + C.icon('puzzle', 'xs') + 'v' + esc(m.version) + (m.author ? ' · ' + esc(m.author) : '') + ' · folder <code>' + esc(m.folder) + '</code>' + (e && e.viewers.length ? ' · shows ' + esc(e.viewers.map(v => v.label).join(', ')) : '') + (!allowed ? ' · <b>turn on community extensions first</b>' : '') + '</div>',
         c: () => allowed ? ctl.toggle('ui.extensions.' + m.id) : '<button class="toggle" disabled aria-disabled="true"></button>' });
     }
     return rows;
@@ -96,7 +97,7 @@
     const L = [
       // general
       { s: 'general', k: 'ui.layout.reopenLast', name: 'Reopen last folder on startup', desc: 'Skip the start screen and open the folder you used last.', c: () => ctl.toggle('ui.layout.reopenLast') },
-      { s: 'general', k: 'ui.layout.afterOrganize', name: 'After organizing, show', desc: 'Which view opens when a plan is ready.', c: () => ctl.seg('ui.layout.afterOrganize', [['structure', 'Structure'], ['changes', 'Changes'], ['graph', 'Graph']]) },
+      { s: 'general', k: 'ui.layout.afterOrganize', name: 'Show a new plan as', desc: 'What you see first when a plan is ready.', c: () => ctl.seg('ui.layout.afterOrganize', [['structure', 'Folders'], ['changes', 'Every move'], ['graph', 'Graph']]) },
       { s: 'general', k: 'ui.layout.confirmApply', name: 'Confirm before applying', desc: 'Ask before moving files. You can always undo either way.', c: () => ctl.toggle('ui.layout.confirmApply') },
       { s: 'general', k: 'ui.layout.noticeSeconds', name: 'Notification duration', desc: 'How long messages stay in the top-right corner.', c: () => ctl.slider('ui.layout.noticeSeconds', 2, 15, 1, 's') },
 
@@ -104,7 +105,7 @@
       { s: 'appearance', g: 'Theme', k: 'ui.appearance.mode', name: 'Base color scheme', desc: 'Match system follows Windows’ light or dark setting.', kw: 'dark light mode system', c: () => ctl.seg('ui.appearance.mode', [['dark', 'Dark'], ['light', 'Light'], ['system', 'Match system']]) },
       { s: 'appearance', g: 'Theme', k: 'ui.appearance.themeDark', name: 'Dark theme', desc: 'Used in dark mode.', kw: 'onyx jet graphite lapis jade amber garnet amethyst preset', stack: true, c: () => themeGrid('ui.appearance.themeDark', presets.filter(([, x]) => x.mode === 'dark')) },
       { s: 'appearance', g: 'Theme', k: 'ui.appearance.themeLight', name: 'Light theme', desc: 'Used in light mode.', kw: 'pearl marble quartz sage preset', stack: true, c: () => themeGrid('ui.appearance.themeLight', presets.filter(([, x]) => x.mode === 'light')) },
-      { s: 'appearance', g: 'Theme', k: 'x.themes', name: 'Your color schemes', desc: 'Build your own from scratch, from the current theme, or from just a background and an accent color. Your schemes show up in the theme lists above, marked with a pencil.', kw: 'custom theme colors colour scheme palette editor build create', noReset: true, c: () => '<button class="btn" data-x="theme-new">' + C.icon('plus') + 'New scheme</button><button class="btn" data-x="theme-dup">' + C.icon('copy') + 'Duplicate current</button><button class="btn" data-x="theme-paste">' + C.icon('upload') + 'Paste code</button>' },
+      { s: 'appearance', g: 'Theme', k: 'x.themes', name: 'Your color schemes', desc: 'Start from scratch, the current theme, or just a background and accent. Yours appear in the lists above.', kw: 'custom theme colors colour scheme palette editor build create', noReset: true, c: () => '<button class="btn" data-x="theme-new">' + C.icon('plus') + 'New scheme</button><button class="btn" data-x="theme-dup">' + C.icon('copy') + 'Duplicate current</button><button class="btn" data-x="theme-paste">' + C.icon('upload') + 'Paste code</button>' },
       { s: 'appearance', g: 'Theme', k: 'ui.appearance.accent', name: 'Accent color', desc: 'Buttons, highlights and focus rings. Text on buttons switches between black and white automatically so it stays readable.', kw: 'color colour highlight', c: () => accentPicker() },
       { s: 'appearance', g: 'Text', k: 'ui.appearance.zoom', name: 'Interface zoom', desc: 'Scales the whole window. Also Ctrl+= and Ctrl+-.', kw: 'scale size bigger smaller', c: () => ctl.slider('ui.appearance.zoom', 70, 160, 5, '%') },
       { s: 'appearance', g: 'Text', k: 'ui.appearance.fontUi', name: 'Interface font', desc: 'Pick Custom to use any font installed on your PC.', kw: 'typeface', c: () => ctl.select('ui.appearance.fontUi', fontOpts) },
@@ -118,10 +119,10 @@
       // layout
       { s: 'layout', k: 'ui.layout.ribbon', name: 'Show ribbon', desc: 'The narrow strip of icons on the far left.', c: () => ctl.toggle('ui.layout.ribbon') },
       { s: 'layout', k: 'ui.layout.statusBar', name: 'Show status bar', desc: 'File counts, pending changes, theme and AI status in the bottom corner.', c: () => ctl.toggle('ui.layout.statusBar') },
-      { s: 'layout', k: 'x.presets', name: 'Layout', desc: 'Start from a preset. You can also drag any tab to a sidebar, another tab bar, or the edge of a pane to split it. Right-click a tab for the same options.', kw: 'drag dock panel split move window graph swap mirror', stack: true, noReset: true, c: () => presetPicker() },
+      { s: 'layout', k: 'x.presets', name: 'Layout', desc: 'Start from a preset, or drag any tab to a sidebar or the edge of a pane.', kw: 'drag dock panel split move window graph swap mirror', stack: true, noReset: true, c: () => presetPicker() },
       { s: 'layout', k: 'x.panels', name: 'Where each panel lives', desc: '', kw: 'files organize graph changes structure sidebar hide', stack: true, noReset: true, c: () => panelPlacer() },
       { s: 'layout', k: 'ui.layout.tabIcons', name: 'Show icons in tabs', desc: '', c: () => ctl.toggle('ui.layout.tabIcons') },
-      { s: 'layout', k: 'ui.layout.readableWidth', name: 'Reading width', desc: 'How wide the Overview and Proposed structure pages can get.', kw: 'line length', c: () => ctl.seg('ui.layout.readableWidth', [['narrow', 'Narrow'], ['medium', 'Medium'], ['wide', 'Wide'], ['full', 'Full']]) },
+      { s: 'layout', k: 'ui.layout.readableWidth', name: 'Reading width', desc: 'How wide the Organize page can get.', kw: 'line length', c: () => ctl.seg('ui.layout.readableWidth', [['narrow', 'Narrow'], ['medium', 'Medium'], ['wide', 'Wide'], ['full', 'Full']]) },
 
       // files
       { s: 'files', k: 'ui.explorer.sort', name: 'Sort files by', desc: '', c: () => ctl.select('ui.explorer.sort', [['name', 'Name'], ['modified', 'Last modified (newest first)'], ['size', 'Size (largest first)'], ['type', 'File type']]) },
@@ -132,9 +133,9 @@
       { s: 'files', k: 'ui.explorer.guides', name: 'Indent guides', desc: 'Vertical lines that show nesting.', c: () => ctl.toggle('ui.explorer.guides') },
 
       // graph
-      { s: 'library', k: 'ui.library.autoTag', name: 'Tag new files automatically', desc: 'When a folder opens, Onyx tags new files from their names: #invoice, #screenshot, #2024, a shared tag for a series. Runs offline and instantly. Tags you remove never come back.', kw: 'auto tag automatic offline rules', c: () => ctl.seg('ui.library.autoTag', [['rules', 'From names'], ['off', 'Off']]) },
-      { s: 'library', k: 'x.libai', name: 'Tag with AI', desc: 'AI reads file names (never contents) and adds 1 to 4 tags about topic, project or purpose. It reuses your existing tags. Uses the provider from AI provider.', kw: 'ai tag smart', noReset: true, c: () => '<button class="btn" data-action="lib-ai-untagged">' + C.icon('sparkles') + 'Tag untagged files</button><button class="btn" data-action="lib-clear-auto">' + C.icon('rotate-ccw') + 'Remove automatic tags</button>' },
-      { s: 'library', k: 'ui.library.dblClick', name: 'Double-click a file to', desc: '<b>Preview</b> shows images, PDFs, video, sound and text inside Onyx (whatever your viewer extensions can show) and opens everything else in its app. Enter does the same as double-click, and Space always previews.', kw: 'open reveal double click preview viewer', c: () => ctl.seg('ui.library.dblClick', [['preview', 'Preview it'], ['open', 'Open it in its app'], ['reveal', 'Show it in its folder']]) },
+      { s: 'library', k: 'ui.library.autoTag', name: 'Tag new files automatically', desc: 'Offline tags from file names, like #invoice or #screenshot. Tags you remove don’t come back.', kw: 'auto tag automatic offline rules', c: () => ctl.seg('ui.library.autoTag', [['rules', 'From names'], ['off', 'Off']]) },
+      { s: 'library', k: 'x.libai', name: 'Tag with AI', desc: 'AI reads file names (never contents) and adds 1–4 tags, reusing yours where it can.', kw: 'ai tag smart', noReset: true, c: () => '<button class="btn" data-action="lib-ai-untagged">' + C.icon('sparkles') + 'Tag untagged files</button><button class="btn" data-action="lib-clear-auto">' + C.icon('rotate-ccw') + 'Remove automatic tags</button>' },
+      { s: 'library', k: 'ui.library.dblClick', name: 'Double-click a file to', desc: '<b>Preview</b> shows it inside Onyx when a viewer extension can, otherwise opens its app. Enter does the same; Space always previews.', kw: 'open reveal double click preview viewer', c: () => ctl.seg('ui.library.dblClick', [['preview', 'Preview it'], ['open', 'Open it in its app'], ['reveal', 'Show it in its folder']]) },
       { s: 'library', k: 'ui.library.thumbs', name: 'Show thumbnails', desc: 'Previews of images, videos and documents in grid view and the details panel, made by Windows.', kw: 'preview thumbnail image', c: () => ctl.toggle('ui.library.thumbs') },
       { s: 'library', k: 'ui.library.treeTags', name: 'Show tags in the file tree', desc: 'Small colored dots next to tagged files in Files.', kw: 'dots tree explorer', c: () => ctl.toggle('ui.library.treeTags') },
       { s: 'library', k: 'ui.library.details', name: 'Show the details panel', desc: 'Preview, tags and properties of the selected file, on the right of the Library.', kw: 'inspector preview panel', c: () => ctl.toggle('ui.library.details') },
@@ -147,7 +148,7 @@
       { s: 'graph', k: 'ui.graph.textFade', name: 'Text fade threshold', desc: 'Higher hides labels until you zoom in further.', c: () => ctl.slider('ui.graph.textFade', 0.3, 2.5, 0.1, 'x') },
 
       // organizing
-      { s: 'organizing', k: 'org.depth', name: 'Inside folders', desc: '<b>Smart</b> re-sorts general folders like Documents or New folder and leaves your own named folders alone. <b>Everything</b> re-sorts every folder. Either way, bundles stay together: folders whose files work as one piece, like a web project (HTML with its scripts), a code project, an app or game, a 3D model with its textures, or a music project.', kw: 'nested subfolders deep bundle component', c: () => ctl.seg('org.depth', [['smart', 'Smart'], ['all', 'Everything'], ['top', 'Only loose files']]) },
+      { s: 'organizing', k: 'org.depth', name: 'Inside folders', desc: '<b>Smart</b> re-sorts general folders like Documents and leaves your named folders alone. <b>Everything</b> re-sorts every folder. Projects, apps and 3D models with their textures always stay together.', kw: 'nested subfolders deep bundle component', c: () => ctl.seg('org.depth', [['smart', 'Smart'], ['all', 'Everything'], ['top', 'Only loose files']]) },
       { s: 'organizing', k: 'org.seriesMin', name: 'Series folder threshold', desc: 'Files like <code>excavatorio1.obj</code>, <code>excavatorio2.obj</code> get their own folder once there are this many.', c: () => ctl.select('org.seriesMin', [2, 3, 4, 5].map(n => [n, String(n)])) },
       { s: 'organizing', k: 'org.maxDepth', name: 'Maximum folder depth', desc: 'How many levels deep new folders can go.', c: () => ctl.select('org.maxDepth', [1, 2, 3, 4].map(n => [n, String(n)])) },
       { s: 'organizing', k: 'org.useExisting', name: 'Use folders that already exist', desc: 'A loose tax return goes into your <code>Taxes</code> folder; images go to <code>Photos</code> if that’s what you call it.', c: () => ctl.toggle('org.useExisting') },
@@ -156,7 +157,7 @@
 
       // rules
       { s: 'rules', k: 'org.rules', name: 'Rules', desc: 'Checked top to bottom; the first match wins. Tip: right-click any file in a plan and choose <b>Always put files like this in…</b>', kw: 'custom rule contains extension pattern', stack: true, c: () => rulesEditor(), custom: true },
-      { s: 'rules', k: 'org.keepFolders', name: 'Always keep these folders together', desc: 'Folder names or patterns. Onyx never splits them up, even if they don’t look like a bundle. Tip: right-click a folder in the file tree.', kw: 'bundle component project', stack: true, c: () => chipEditor('org.keepFolders', 'e.g. excavatorio-modular or *-project'), custom: true },
+      { s: 'rules', k: 'org.keepFolders', name: 'Always keep these folders together', desc: 'Folder names or patterns Onyx never splits up.', kw: 'bundle component project', stack: true, c: () => chipEditor('org.keepFolders', 'e.g. excavatorio-modular or *-project'), custom: true },
       { s: 'rules', k: 'org.openFolders', name: 'Always let Onyx sort inside these folders', desc: 'For folders Onyx would otherwise keep together or leave alone.', kw: 'bundle open sort inside', stack: true, c: () => chipEditor('org.openFolders', 'e.g. Downloads (2)'), custom: true },
       { s: 'rules', k: 'org.neverMove', name: 'Never move', desc: 'Exact file names, or patterns like <code>*.lnk</code> or <code>Screenshot*</code>.', kw: 'exclude ignore skip', stack: true, c: () => neverEditor(), custom: true },
 
@@ -166,7 +167,7 @@
       { s: 'ai', k: 'ai.model', name: 'Model', desc: 'Leave empty for the default' + ((C.S.settings.providers[p] || {}).model ? ' (<code>' + esc(C.S.settings.providers[p].model) + '</code>)' : '') + '.' + (p === 'freeai' ? ' free.ai has hundreds of models; the model page on free.ai lists their IDs. Bigger models give better folder names but use more of your monthly calls.' : ''), hidden: () => p === 'off' || p === 'pollinations', c: () => ctl.text('ai.model', (C.S.settings.providers[p] || {}).model || '') },
       { s: 'ai', k: 'ai.key', name: 'API key', desc: C.S.settings.ai.hasKey ? 'A key is saved and encrypted on this computer. Type a new one to replace it, or clear the field to remove it.' : 'Stored encrypted on this computer and only sent to the provider you picked.', hidden: () => p !== 'openai' && p !== 'anthropic' && p !== 'freeai', c: () => '<input class="text-input" type="password" id="sKey" spellcheck="false" placeholder="' + (C.S.settings.ai.hasKey ? '•••••••• saved' : 'Paste key') + '" aria-label="API key">', noReset: true },
       { s: 'ai', k: 'ai.test', name: 'Test connection', desc: 'Sends a tiny request to check the provider answers.', c: () => '<span class="test-result" id="sTestRes"></span><button class="btn" id="sTest"' + (p === 'off' ? ' disabled' : '') + '>Test</button>', noReset: true },
-      { s: 'ai', k: 'org.aiInstructions', name: 'Extra instructions for the AI', desc: 'Plain-language preferences the AI should follow, like “Keep all Minecraft files in Games/Minecraft” or “Use Spanish folder names”.', kw: 'prompt preferences', stack: true, c: () => '<textarea class="textarea prose" data-t="textarea" data-k="org.aiInstructions" placeholder="One preference per line">' + esc(get('org.aiInstructions') || '') + '</textarea>' },
+      { s: 'ai', k: 'org.aiInstructions', name: 'Extra instructions for the AI', desc: 'Like “Keep Minecraft files in Games/Minecraft” or “Use Spanish folder names”.', kw: 'prompt preferences', stack: true, c: () => '<textarea class="textarea prose" data-t="textarea" data-k="org.aiInstructions" placeholder="One preference per line">' + esc(get('org.aiInstructions') || '') + '</textarea>' },
 
       // extensions
       ...extensionRows(),
@@ -175,7 +176,7 @@
 
       // advanced
       { s: 'advanced', k: 'ui.appearance.cssEnabled', name: 'Use custom CSS', desc: 'Apply the snippet below on top of the theme.', kw: 'style snippet', c: () => ctl.toggle('ui.appearance.cssEnabled') },
-      { s: 'advanced', k: 'ui.appearance.cssSnippet', name: 'CSS snippet', desc: 'Every color is a variable you can override, for example <code>body { --accent: #ff8a00; }</code> or <code>.tree-item-self { font-size: 14px; }</code>. Changes apply as you type.', kw: 'style theme variables', stack: true, c: () => '<textarea class="textarea" data-t="textarea" data-k="ui.appearance.cssSnippet" spellcheck="false" placeholder="/* your CSS */">' + esc(get('ui.appearance.cssSnippet') || '') + '</textarea>' },
+      { s: 'advanced', k: 'ui.appearance.cssSnippet', name: 'CSS snippet', desc: 'Every color is a variable you can override, for example <code>body { --accent: #ff8a00; }</code> or <code>.tree-item-self { font-size:15px; }</code>. Changes apply as you type.', kw: 'style theme variables', stack: true, c: () => '<textarea class="textarea" data-t="textarea" data-k="ui.appearance.cssSnippet" spellcheck="false" placeholder="/* your CSS */">' + esc(get('ui.appearance.cssSnippet') || '') + '</textarea>' },
       { s: 'advanced', k: 'x.backup', name: 'Back up settings', desc: 'Export everything except your API key to a file, or load a file you exported before.', kw: 'export import json backup', c: () => '<button class="btn" data-x="export">' + C.icon('download') + 'Export…</button><button class="btn" data-x="import">' + C.icon('upload') + 'Import…</button>', noReset: true },
       { s: 'advanced', k: 'x.reset', name: 'Reset', desc: 'Put appearance, layout, hotkeys and explorer settings back to how Onyx ships. Your rules and AI settings are kept.', kw: 'defaults factory', c: () => '<button class="btn" data-x="reset-ui">Reset look and layout</button>', noReset: true },
       { s: 'advanced', k: 'x.resetOrg', name: 'Reset organizing', desc: 'Clear your rules, never-move list, folder names and organizing options.', c: () => '<button class="btn mod-warning" data-x="reset-org">Reset organizing</button>', noReset: true },
@@ -230,7 +231,7 @@
   function chipEditor(key, ph) {
     const list = get(key) || [];
     const id = 'chip-' + key.replace(/\W/g, '');
-    return '<div class="chips">' + (list.length ? list.map((p, i) => '<span class="chip">' + esc(p) + '<button data-x="chip-del" data-key="' + key + '" data-i="' + i + '" aria-label="Remove ' + esc(p) + '">' + C.icon('x', 'xs') + '</button></span>').join('') : '<span style="color:var(--text-faint);font-size:12.5px">Nothing yet.</span>') + '</div>' +
+    return '<div class="chips">' + (list.length ? list.map((p, i) => '<span class="chip">' + esc(p) + '<button data-x="chip-del" data-key="' + key + '" data-i="' + i + '" aria-label="Remove ' + esc(p) + '">' + C.icon('x', 'xs') + '</button></span>').join('') : '<span style="color:var(--text-faint);font-size:13px">Nothing yet.</span>') + '</div>' +
       '<div class="chip-add"><input class="text-input" id="' + id + '" data-chip-input="' + key + '" spellcheck="false" placeholder="' + esc(ph) + '" aria-label="Add to list"><button class="btn" data-x="chip-add" data-key="' + key + '">Add</button></div>';
   }
   function presetPicker() {
@@ -263,8 +264,7 @@
       const name = ci > 0 ? '<span class="prefix">' + esc(c.name.slice(0, ci + 2)) + '</span>' + esc(c.name.slice(ci + 2)) : esc(c.name);
       h += '<div class="hotkey-row' + (recordingId === c.id ? ' recording' : '') + (changed ? ' is-changed' : '') + '" data-hk="' + c.id + '">' +
         '<div class="hk-name">' + name + (clash && clash.length ? '<div class="hk-conflict">Also used by ' + esc(clash.join(', ')) + '</div>' : '') + '</div>' +
-        '<div class="hk-keys">' + (recordingId === c.id ? 'Press keys…' : label ? '<kbd>' + esc(label) + '</kbd>' : '<span class="none">None</span>') + '</div>' +
-        '<button class="btn small" data-x="hk-record" data-id="' + c.id + '">' + (recordingId === c.id ? 'Cancel' : 'Change') + '</button>' +
+        '<button class="hk-keys hk-btn" data-x="hk-record" data-id="' + c.id + '" aria-label="' + esc(recordingId === c.id ? 'Recording: press keys, Esc to cancel' : 'Change shortcut for ' + c.name) + '" data-tip="' + (recordingId === c.id ? 'Press keys · Esc cancels · Backspace removes' : 'Click to change') + '">' + (recordingId === c.id ? 'Press keys…' : label ? '<kbd>' + esc(label) + '</kbd>' : '<span class="none">Add shortcut</span>') + '</button>' +
         '<button class="clickable-icon" data-x="hk-reset" data-id="' + c.id + '" aria-label="Restore default" data-tip="Restore default"' + (changed ? '' : ' style="visibility:hidden"') + '>' + C.icon('rotate-ccw') + '</button></div>';
     }
     return h;

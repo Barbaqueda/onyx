@@ -88,7 +88,7 @@ try {
   & $Rcedit (Join-Path $Dest 'Onyx.exe') --set-icon (Join-Path $Src 'icon.ico') `
     --set-version-string 'ProductName' 'Onyx' --set-version-string 'FileDescription' 'Onyx' `
     --set-version-string 'CompanyName' 'Onyx' --set-version-string 'OriginalFilename' 'Onyx.exe' `
-    --set-version-string 'InternalName' 'Onyx' --set-file-version '2.7.0' --set-product-version '2.7.0'
+    --set-version-string 'InternalName' 'Onyx' --set-file-version '2.8.0' --set-product-version '2.8.0'
   if ($LASTEXITCODE -ne 0) { throw "rcedit exit code $LASTEXITCODE" }
   Write-Host 'Icon set.' -ForegroundColor Green
 } catch { Write-Host "Couldn't set the icon ($($_.Exception.Message)). Onyx still works, it just has the Electron icon." -ForegroundColor Yellow }

@@ -30,8 +30,10 @@
           const fr = document.createElement('iframe');
           fr.tabIndex = -1; fr.title = 'First page';
           fr.src = api.url + '#toolbar=0&navpanes=0&view=FitH';
+          const done = () => { const sp = box.querySelector('.spinner'); if (sp) sp.remove(); box.classList.add('is-loaded'); };
+          fr.addEventListener('load', () => setTimeout(done, 150), { once: true });
+          setTimeout(done, 5000);
           box.insertBefore(fr, box.firstChild);
-          setTimeout(() => { const sp = box.querySelector('.spinner'); if (sp) sp.remove(); }, 700);
         }, 300);
         return () => clearTimeout(t);
       },

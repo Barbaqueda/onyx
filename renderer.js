@@ -29,12 +29,12 @@
 
   const S = {
     vault: null, plan: null, settings: null,
-    strategy: store.get('strategy', 'smart'),
+    strategy: store.get('strategy', 'smart'), orgView: store.get('orgView', 'tree'),
     busy: false, progress: null, aiTest: null,
     selected: null, kindsKey: '', kinds: null,
     explorerOpen: new Set(), proposedOpen: new Set(),
     explorerFilter: '', changesFilter: '',
-    graphMode: 'proposed', graphPanel: true, graphInst: null,
+    graphMode: 'proposed', graphPanel: false, graphInst: null,
   };
 
   // ======================================================================= utils
@@ -112,6 +112,8 @@
     if (section === 'extensions' && window.OnyxExtensions) { window.OnyxExtensions.changed(key); LIB.refresh(); }
   }
   T.onSystemChange(() => applyTheme());
+  document.addEventListener('keydown', e => { if (/^(Arrow|Tab|Home|End|Page)/.test(e.key)) document.body.classList.add('kbd-nav'); }, true);
+  document.addEventListener('mousedown', () => document.body.classList.remove('kbd-nav'), true);
 
   // ======================================================================= notices / tooltip
   function notice(msg, type, ms, action) {
@@ -119,11 +121,11 @@
     el.className = 'notice ' + (type || '');
     el.setAttribute('role', 'status');
     const ic = { success: 'check-circle', error: 'alert-triangle', warn: 'alert-triangle' }[type] || 'info';
-    el.innerHTML = icon(ic) + '<div>' + msg + (action ? '<a class="n-action">' + esc(action.label) + '</a>' : '') + '</div>';
+    el.innerHTML = icon(ic) + '<div>' + msg + (action ? '<a class="n-action">' + esc(action.label) + '</a>' : '') + '</div><button class="n-close" aria-label="Dismiss">' + icon('x') + '</button>';
     const box = $('#notices');
+    // one message at a time: the newest replaces what was there
+    box.querySelectorAll('.notice').forEach(old => old.remove());
     box.appendChild(el);
-    const live = [...box.querySelectorAll('.notice:not(.out)')];
-    for (const old of live.slice(0, Math.max(0, live.length - 3))) { old.classList.add('out'); setTimeout(() => old.remove(), 200); }
     const close = () => { el.classList.add('out'); setTimeout(() => el.remove(), 200); };
     el.addEventListener('click', e => { if (action && e.target.closest('.n-action')) action.run(); close(); });
     setTimeout(close, ms || (UI().layout.noticeSeconds || 5) * 1000 * (action ? 1.6 : 1));
@@ -156,41 +158,88 @@
     showTip.t = setTimeout(() => { if (tipEl === el) showTip(el, esc(el.dataset.tip) + k); }, el.closest('.tree') ? 450 : 250);
   });
   document.addEventListener('mousedown', hideTip);
+  // a tooltip never outlives its button: it goes when the button is re-drawn, disabled or scrolled away
+  document.addEventListener('mousemove', () => { if (tipEl && (!tipEl.isConnected || !tipEl.matches(':hover') || tipEl.disabled)) hideTip(); }, { passive: true });
+  for (const ev of ['keydown', 'wheel']) document.addEventListener(ev, hideTip, { passive: true, capture: true });
+  window.addEventListener('blur', hideTip);
+  new MutationObserver(() => { if (tipEl && !tipEl.isConnected) hideTip(); }).observe(document.body, { childList: true, subtree: true });
 
   // ======================================================================= menus
   let menuEl = null;
-  function closeMenu() { if (menuEl) { menuEl.remove(); menuEl = null; } }
+  // menus: icon rows (cut, copy, rename, delete, like Windows 11), real cascading submenus, disabled items, checks in their own column
+  let menuStack = [];
+  function closeMenu() { for (const m of menuStack) m.remove(); menuStack = []; menuEl = null; }
+  function closeFrom(level) { while (menuStack.length > level) menuStack.pop().remove(); menuEl = menuStack[0] || null; }
   function showMenu(items, x, y, opts) {
     closeMenu();
+    openMenuLevel(items, x, y, 0, opts || {});
+  }
+  function openMenuLevel(items, x, y, level, opts) {
+    closeFrom(level);
     const m = document.createElement('div');
-    m.className = 'menu';
+    m.className = 'menu' + (level ? ' is-sub' : '');
     m.setAttribute('role', 'menu');
     m.innerHTML = items.map((it, i) => {
       if (it === 'sep') return '<div class="menu-sep"></div>';
       if (it.heading) return '<div class="menu-label">' + esc(it.heading) + '</div>';
-      return '<button class="menu-item' + (it.danger ? ' danger' : '') + '" role="menuitem" data-i="' + i + '">' + (it.icon ? icon(it.icon) : '') + '<span>' + esc(it.label) + '</span>' +
-        (it.sub ? '<span class="sub">' + esc(it.sub) + '</span>' : '') + (it.check ? icon('check', 'xs') : '') + '</button>';
+      if (it.iconRow) return '<div class="menu-iconrow" role="group">' + it.iconRow.map((b, j) => '<button class="menu-iconbtn' + (b.danger ? ' danger' : '') + '" role="menuitem" data-i="' + i + '" data-j="' + j + '" aria-label="' + esc(b.label) + '" data-tip="' + esc(b.label + (b.sub ? ' (' + b.sub + ')' : '')) + '"' + (b.disabled ? ' disabled' : '') + '>' + icon(b.icon) + '</button>').join('') + '</div>';
+      const sub = !!it.submenu;
+      return '<button class="menu-item' + (it.danger ? ' danger' : '') + (sub ? ' has-sub' : '') + '" role="menuitem"' + (sub ? ' aria-haspopup="menu"' : '') + ' data-i="' + i + '"' + (it.disabled ? ' disabled aria-disabled="true"' : '') + '>' +
+        '<span class="mi-icon">' + (it.icon ? icon(it.icon) : '') + '</span><span class="mi-label">' + esc(it.label) + '</span>' +
+        (it.sub ? '<span class="sub">' + esc(it.sub) + '</span>' : '') +
+        '<span class="mi-end">' + (sub ? icon('chevron-right', 'xs') : it.check ? icon('check', 'xs') : '') + '</span></button>';
     }).join('');
     document.body.appendChild(m);
     const r = m.getBoundingClientRect();
-    if (opts && opts.above) y = y - r.height - 6;
+    if (opts.above) y = y - r.height - 6;
+    if (level && opts.parentRect) {
+      const pr = opts.parentRect;
+      x = pr.right + r.width + 4 > window.innerWidth ? pr.left - r.width - 4 : pr.right + 2;
+      y = pr.top - 5;
+    }
     m.style.left = Math.max(6, Math.min(window.innerWidth - r.width - 6, x)) + 'px';
     m.style.top = Math.max(6, Math.min(window.innerHeight - r.height - 6, y)) + 'px';
-    m.addEventListener('click', e => {
+    const openSub = (btn, focus) => {
+      const it = items[+btn.dataset.i];
+      const subItems = typeof it.submenu === 'function' ? it.submenu() : it.submenu;
+      m.querySelectorAll('.menu-item.is-open').forEach(b => b.classList.remove('is-open'));
+      btn.classList.add('is-open');
+      openMenuLevel(subItems, 0, 0, level + 1, { parentRect: btn.getBoundingClientRect() });
+      if (focus) { const f = menuStack[level + 1] && menuStack[level + 1].querySelector('.menu-item:not([disabled])'); if (f) f.focus(); }
+    };
+    let hoverT = null;
+    m.addEventListener('mouseover', e => {
       const b = e.target.closest('.menu-item'); if (!b) return;
-      const it = items[+b.dataset.i]; closeMenu(); it.action && it.action();
+      clearTimeout(hoverT);
+      hoverT = setTimeout(() => {
+        if (!b.isConnected) return;
+        if (b.classList.contains('has-sub')) { if (!b.classList.contains('is-open')) openSub(b); }
+        else if (menuStack.length > level + 1) { closeFrom(level + 1); m.querySelectorAll('.menu-item.is-open').forEach(x => x.classList.remove('is-open')); }
+      }, 140);
+    });
+    m.addEventListener('click', e => {
+      const ib = e.target.closest('.menu-iconbtn');
+      if (ib && !ib.disabled) { const b = items[+ib.dataset.i].iconRow[+ib.dataset.j]; closeMenu(); hideTip(); b.action && b.action(); return; }
+      const b = e.target.closest('.menu-item'); if (!b || b.disabled) return;
+      const it = items[+b.dataset.i];
+      if (it.submenu) { openSub(b, false); return; }
+      closeMenu(); it.action && it.action();
     });
     m.addEventListener('keydown', e => {
-      const btns = [...m.querySelectorAll('.menu-item')];
+      const btns = [...m.querySelectorAll('.menu-item:not([disabled]), .menu-iconbtn:not([disabled])')];
       const i = btns.indexOf(document.activeElement);
-      if (e.key === 'ArrowDown') { btns[(i + 1) % btns.length].focus(); e.preventDefault(); }
-      else if (e.key === 'ArrowUp') { btns[(i - 1 + btns.length) % btns.length].focus(); e.preventDefault(); }
+      if (e.key === 'ArrowDown') { btns[(i + 1) % btns.length].focus(); e.preventDefault(); e.stopPropagation(); }
+      else if (e.key === 'ArrowUp') { btns[(i - 1 + btns.length) % btns.length].focus(); e.preventDefault(); e.stopPropagation(); }
+      else if (e.key === 'ArrowRight' && document.activeElement && document.activeElement.classList.contains('has-sub')) { openSub(document.activeElement, true); e.preventDefault(); e.stopPropagation(); }
+      else if ((e.key === 'ArrowLeft' || e.key === 'Escape') && level) { const parent = menuStack[level - 1]; closeFrom(level); const ob = parent && parent.querySelector('.menu-item.is-open'); if (ob) { ob.classList.remove('is-open'); ob.focus(); } e.preventDefault(); e.stopPropagation(); }
       else if (e.key === 'Escape') { closeMenu(); e.stopPropagation(); }
     });
-    menuEl = m;
-    if (opts && opts.keyboard) { const f = m.querySelector('.menu-item'); f && f.focus(); }
+    menuStack.push(m);
+    menuEl = menuStack[0];
+    if (opts.keyboard) { const f = m.querySelector('.menu-item:not([disabled]), .menu-iconbtn:not([disabled])'); f && f.focus(); }
+    return m;
   }
-  document.addEventListener('mousedown', e => { if (menuEl && !menuEl.contains(e.target)) closeMenu(); });
+  document.addEventListener('mousedown', e => { if (menuStack.length && !menuStack.some(m => m.contains(e.target))) closeMenu(); });
   window.addEventListener('blur', closeMenu);
 
   // ======================================================================= modals
@@ -227,7 +276,9 @@
       else if (!e.shiftKey && document.activeElement === f[f.length - 1]) { f[0].focus(); e.preventDefault(); }
     });
     modals.push(m);
-    const first = c.querySelector('[autofocus]') || c.querySelector('.mod-cta, .mod-warning');
+    // a destructive dialog starts on the safe choice, so Enter can't delete by accident
+    const danger = c.querySelector('.modal-button-container .mod-warning');
+    const first = c.querySelector('[autofocus]') || (danger ? [...c.querySelectorAll('.modal-button-container .btn')].find(b => !b.classList.contains('mod-warning')) : null) || c.querySelector('.mod-cta, .mod-warning');
     if (first) setTimeout(() => first.focus(), 30);
     return m;
   }
@@ -306,30 +357,30 @@
   // ----------------------------------------------------------------- explorer (left)
   function renderExplorer() {
     const el = $('#explorer');
-    $('#vaultSwitcher .name').textContent = S.vault ? S.vault.vaultName : 'No vault open';
     if (!S.vault) { el.innerHTML = '<div class="nav-empty">No folder open.<br><a class="mod-link" data-action="open-folder">Open a folder</a><br><a class="mod-link" data-action="places">Browse This PC</a></div>'; return; }
-    const f = S.explorerFilter.trim().toLowerCase();
+    // a navigation pane, like File Explorer's: folders only; files live in the Library
     const plan = planBySource();
     const ex = UI().explorer;
-    let files = S.vault.files;
-    if (f) files = files.filter(x => x.path.toLowerCase().includes(f));
-    const entries = files.map(x => ({ path: x.path, name: x.name, source: x.path, size: x.size, mtime: x.lastModified, item: plan.get(x.path) }));
-    const dirs = f ? [] : S.vault.dirs.map(d => ({ path: d.path, data: { opaque: d.opaque } }));
+    const cwd = typeof LIB.cwd === 'function' ? LIB.cwd() : (LIB.cwd || '');
+    const dirs = S.vault.dirs.map(d => ({ path: d.path, data: { opaque: d.opaque } }));
+    for (const d of dirs) if (d.path && cwd && (cwd === d.path || cwd.startsWith(d.path + '/'))) { if (cwd !== d.path) S.explorerOpen.add(d.path); }
     const kinds = kindsMap();
     const treeTags = UI().library.treeTags !== false;
-    const html = treeHTML(buildTree(entries, dirs), {
+    const root = '<div class="tree-item"><div class="tree-item-self mod-folder mod-root' + (!cwd ? ' is-active' : '') + '" tabindex="-1" role="treeitem" data-kind="folder" data-root="1" data-tree="explorer" data-path="">' +
+      '<div class="collapse-icon">' + icon(S.vault.browse ? 'hard-drive' : 'folder-open') + '</div><div class="tree-item-inner">' + esc(S.vault.vaultName) + '</div><div class="tree-item-flair"></div></div></div>';
+    const html = treeHTML(buildTree([], dirs), {
       id: 'explorer',
-      isOpen: n => !!f || S.explorerOpen.has(n.path),
+      isOpen: n => S.explorerOpen.has(n.path),
       folderFlair: n => n.data.opaque ? '<span class="pill muted">not scanned</span>' : bundlePill(n.path, kinds),
-      folderClass: n => n.data.opaque ? 'mod-faint' : '',
+      folderClass: n => (n.data.opaque ? 'mod-faint' : '') + (n.path === cwd ? ' is-active' : ''),
       fileClass: e => (S.selected === e.source ? 'is-active' : '') + (e.item && e.item.skip ? ' mod-skipped' : ''),
       fileFlair: e => (treeTags ? tagDots(e.source) : '') + (ex.sizes ? '<span>' + fmt(e.size) + '</span>' : '') + (ex.moveDots && e.item && isMoving(e.item) ? '<span class="move-dot"></span>' : ''),
       fileTip: e => {
         const t = treeTags ? LIB.tagsOf(e.source) : [];
-        return [e.item && isMoving(e.item) ? 'Moves to ' + (dirname(e.item.target) || 'top level') + '/' : '', t.length ? t.map(x => '#' + x).join('  ') : ''].filter(Boolean).join('\n');
+        return [e.item && isMoving(e.item) ? 'Moves to ' + (dirname(e.item.target) || S.vault.vaultName) + '/' : '', t.length ? t.map(x => '#' + x).join('  ') : ''].filter(Boolean).join('\n');
       },
     });
-    el.innerHTML = html || '<div class="nav-empty">' + (f ? 'No files match “' + esc(S.explorerFilter) + '”.' : 'This folder is empty.') + '</div>';
+    el.innerHTML = root + (html ? '<div class="tree-root-children">' + html + '</div>' : '');
   }
 
   function tagDots(p) {
@@ -340,7 +391,7 @@
 
   // ======================================================================= main views
   function viewMeta(v) {
-    if (v === 'structure') return { title: S.plan ? 'Proposed structure' : 'Overview' };
+    if (v === 'structure') return { title: 'Organize', count: S.plan ? S.plan.items.filter(isMoving).length : null };
     if (v === 'changes') return { count: S.plan ? S.plan.items.filter(isMoving).length : null };
     return {};
   }
@@ -348,11 +399,10 @@
   function viewHeader(v) {
     const root = document.querySelector('.view-root[data-view="' + v + '"]');
     if (!root) return;
-    const name = v === 'structure' ? (S.plan ? 'Proposed structure' : 'Overview') : WS.VIEWS[v].name;
+    const name = WS.VIEWS[v].name;
     if (!root.querySelector('[data-title]')) return;
     root.querySelector('[data-title]').innerHTML = S.vault ? '<span class="crumb">' + esc(S.vault.vaultName) + '</span><span class="sep">/</span>' + esc(name) : esc(name);
     let actions = '';
-    if (v === 'structure' && S.plan) actions = btnIcon('expand-proposed', 'chevrons-up-down', 'Expand all') + btnIcon('collapse-proposed', 'chevrons-down-up', 'Collapse all');
     if (v === 'graph' && S.vault) actions = btnIcon('graph-fit', 'crosshair', 'Fit to view');
     if (v === 'library' && S.vault) actions = btnIcon('lib-autotag', 'sparkles', 'Tag automatically') + btnIcon('quick-find', 'search', 'Quick find');
     root.querySelector('[data-actions]').innerHTML = actions;
@@ -376,7 +426,12 @@
     if (v === 'tags') { LIB.renderTagsPanel(el); return; }
     el.classList.toggle('busy', S.busy);
     if (v === 'structure' && S.vault && S.vault.browse) { el.innerHTML = browseOverviewHTML(); return; }
-    if (v === 'structure') { const y = el.scrollTop; el.innerHTML = S.vault ? structureHTML() : emptyStateHTML(); el.scrollTop = y; return; }
+    if (v === 'structure') {
+      const y = el.scrollTop; el.innerHTML = S.vault ? structureHTML() : emptyStateHTML(); el.scrollTop = y;
+      const inp = el.querySelector('#changesFilter');
+      if (inp) inp.addEventListener('input', () => { S.changesFilter = inp.value; const p = inp.selectionStart; renderOne('structure'); const n = el.querySelector('#changesFilter'); if (n) { n.focus(); n.setSelectionRange(p, p); } });
+      return;
+    }
     if (S.vault && S.vault.browse && (v === 'graph' || v === 'changes')) {
       if (v === 'graph' && S.graphInst) { S.graphInst.destroy(); S.graphInst = null; }
       el.innerHTML = '<div class="empty-state"><div class="empty-inner">' + icon('shield-check') + '<div class="sub">' + (v === 'graph' ? 'The graph maps a folder Onyx has fully read. Open a folder (not a whole drive) to see it.' : 'Nothing to change here: this location is browse-only.') + '</div><button class="btn" data-action="view-library">' + icon('library') + 'Browse in the Library</button></div></div>';
@@ -398,24 +453,25 @@
   }
   function updateCounts() {
     const n = S.plan ? S.plan.items.filter(isMoving).length : null;
-    document.querySelectorAll('.tab[data-view="changes"] .count').forEach(c => { c.textContent = n == null ? '' : n; });
+    document.querySelectorAll('.tab[data-view="changes"] .count, .tab[data-view="structure"] .count').forEach(c => { c.textContent = n == null ? '' : n; });
   }
 
+  const folderName = p => p.split(/[\\/]/).filter(Boolean).pop() || p;
+  function recentHTML(cls) {
+    const recent = (S.settings && S.settings.ui && S.settings.ui.recent) || [];
+    return recent.map(p => '<div class="' + cls + '"><button class="recent-item" data-action="open-recent" data-path="' + esc(p) + '">' + icon('folder') + '<span class="r-text"><span class="r-name">' +
+      esc(folderName(p)) + '</span><span class="r-path">' + esc(p) + '</span></span></button><button class="clickable-icon r-remove" data-action="recent-remove" data-path="' + esc(p) + '" data-tip="Remove from recent" aria-label="Remove ' + esc(folderName(p)) + ' from recent">' + icon('x', 'xs') + '</button></div>').join('');
+  }
   function emptyStateHTML() {
     const recent = (S.settings && S.settings.ui && S.settings.ui.recent) || [];
-    const k = id => { const l = hotkeyLabel(effectiveHotkey(id)); return l ? '<span class="hint">' + esc(l) + '</span>' : ''; };
-    return '<div class="empty-state"><div class="empty-inner"><img class="logo" src="icon.png" alt="">' +
+    const k = id => { const l = hotkeyLabel(effectiveHotkey(id)); return l ? '<kbd>' + esc(l) + '</kbd>' : ''; };
+    return '<div class="empty-state start"><div class="empty-inner"><img class="logo" src="icon.png" alt="">' +
       '<h1>Onyx</h1><div class="sub">Open a messy folder. Onyx proposes a clean structure, you review it, and nothing moves until you say so.</div>' +
-      '<div class="empty-actions">' +
-      '<button class="empty-action" data-action="open-folder">' + icon('folder-open') + 'Open folder as vault' + k('open-folder') + '</button>' +
-      '<button class="empty-action" data-action="places">' + icon('monitor') + 'Browse This PC<span class="hint">Explore whole drives, browse-only</span></button>' +
-      '<button class="empty-action" data-action="demo">' + icon('flask-conical') + 'Try the demo vault<span class="hint">Nothing on disk is touched</span></button>' +
-      '<button class="empty-action" data-action="palette">' + icon('terminal-square') + 'Open command palette' + k('palette') + '</button>' +
-      '<button class="empty-action" data-action="settings-appearance">' + icon('palette') + 'Make it yours: themes, fonts, layout' + k('settings') + '</button>' +
-      '</div>' +
-      (recent.length ? '<div class="recent-title">Recent</div>' + recent.map(p => '<button class="recent-item" data-action="open-recent" data-path="' + esc(p) + '"><span class="r-name">' +
-        esc(p.split(/[\\/]/).filter(Boolean).pop() || p) + '</span><span class="r-path">' + esc(p) + '</span></button>').join('') : '') +
-      '<div class="drop-hint">Tip: drop a folder anywhere on this window to open it.</div>' +
+      '<div class="start-cta"><button class="btn mod-cta start-primary" data-action="open-folder">' + icon('folder-open') + 'Open a folder' + k('open-folder') + '</button>' +
+      '<button class="btn start-secondary" data-action="places">' + icon('monitor') + 'Browse This PC</button></div>' +
+      (recent.length ? '<div class="recent-title">Recent</div><div class="recent-list">' + recentHTML('recent-row') + '</div>' : '') +
+      '<div class="start-links"><a class="mod-link" data-action="demo">Try the demo</a><span>·</span><a class="mod-link" data-action="palette">Commands' + k('palette') + '</a><span>·</span><a class="mod-link" data-action="settings-appearance">Themes</a></div>' +
+      '<div class="drop-hint">Or drop a folder anywhere on this window.</div>' +
       '</div></div>';
   }
 
@@ -432,72 +488,91 @@
   function prop(ic, key, val) { return '<div class="metadata-property"><div class="metadata-key">' + icon(ic) + esc(key) + '</div><div class="metadata-value">' + val + '</div></div>'; }
   function callout(kind, ic, title, body) { return '<div class="callout ' + kind + '"><div class="callout-title">' + icon(ic) + esc(title) + '</div><div class="callout-content">' + body + '</div></div>'; }
 
+  // Organize: one guided screen. Step 1 choose a way and make a plan, step 2 review it and apply.
+  function recommendedStrategy() { const ai = S.settings && S.settings.ai; return ai && ai.provider !== 'off' ? 'smart' : 'rules'; }
+  function strategyCard(st, big) {
+    const on = st.id === S.strategy;
+    return '<button class="org-way' + (big ? ' is-big' : '') + (on ? ' is-active' : '') + '" role="radio" aria-checked="' + on + '" data-action="set-strategy" data-id="' + st.id + '">' +
+      '<span class="ow-radio"></span>' + icon(st.icon) + '<span class="ow-text"><span class="ow-name">' + esc(st.name) + (big ? '<span class="ow-badge">Recommended</span>' : '') + '</span><span class="ow-desc">' + esc(st.desc) + '</span></span></button>';
+  }
   function structureHTML() {
     const V = S.vault, P = S.plan;
-    let h = '<div class="markdown-reading-view">';
     const st = orgSettings();
     const kinds = kindsMap();
-    const looseMovable = V.files.filter(f => !E.untouchableReason(f) && !E.nestedKeepReason(f, kinds, st));
-    const nestedMovable = looseMovable.filter(f => f.path.includes('/')).length;
-    const bundles = [...kinds.values()].filter(k => k.kind === 'bundle' && k.root === k.path);
-    const depthLabel = { smart: 'loose files and general folders', all: 'everything except bundles', top: 'only loose files' }[st.depth] || 'loose files and general folders';
-    const markers = E.buildContext(V.files, V.dirs).rootMarkers;
     const org = S.settings.organize || {};
     const ruleCount = (org.rules || []).filter(r => r.enabled !== false && r.folder).length;
+    const head = (kicker, lede) => '<div class="org-head"><div class="org-kicker">' + kicker + '</div><h1 class="org-title">' + esc(V.vaultName) + '</h1>' + (lede ? '<p class="org-lede">' + lede + '</p>' : '') + '</div>';
+    let h = '<div class="org">';
     if (!P) {
-      const total = V.files.reduce((a, f) => a + f.size, 0);
-      h += '<div class="inline-title">' + esc(V.vaultName) + '</div>';
-      h += '<div class="metadata"><div class="metadata-title">' + icon('info', 'xs') + 'Properties</div>' +
-        prop('folder', 'location', V.demo ? '<span class="tag grey">demo, in memory</span>' : '<span class="muted">' + esc(V.rootPath) + '</span>') +
-        prop('files', 'files', '<span>' + V.files.length + '</span><span class="muted">' + fmt(total) + '</span>') +
-        prop('folder-open', 'folders', String(V.dirs.length)) +
-        prop('file', 'Onyx can sort', '<span class="tag">' + looseMovable.length + '</span>' + (nestedMovable ? '<span class="muted">' + nestedMovable + ' inside folders</span>' : '')) +
-        prop('folder-input', 'sorting', '<span>' + esc(depthLabel) + '</span> <a class="mod-link" data-action="settings-organizing">Change</a>') +
-        (bundles.length ? prop('package', 'kept together', bundles.slice(0, 4).map(b => '<span class="tag grey" data-tip="' + esc(b.why) + '">' + esc(basename(b.path)) + '</span>').join('') + (bundles.length > 4 ? '<span class="muted">+' + (bundles.length - 4) + ' more</span>' : '')) : '') +
-        prop('list-checks', 'your rules', ruleCount ? '<span>' + plural(ruleCount, 'rule') + '</span> <a class="mod-link" data-action="settings-rules">Edit</a>' : '<a class="mod-link" data-action="settings-rules">Add a rule</a>') + '</div>';
-      if (markers.length) h += callout('warning', 'alert-triangle', 'This looks like a project folder', '<p>Found ' + markers.map(m => '<code>' + esc(m) + '</code>').join(' ') + ' at the top level. Moving files here could break the project. Consider organizing a different folder.</p>');
+      const looseMovable = V.files.filter(f => !E.untouchableReason(f) && !E.nestedKeepReason(f, kinds, st));
+      const markers = E.buildContext(V.files, V.dirs).rootMarkers;
+      const what = st.depth === 'top' ? 'sitting loose at the top of this folder; anything already in a folder stays put'
+        : st.depth === 'all' ? 'here, including ones inside your folders; only bundles (projects, apps, 3D assets) stay together'
+        : 'sitting loose or in general folders like Documents or New folder; projects and your own named folders stay as they are';
+      h += head('Organize', looseMovable.length ? 'Onyx can sort <b>' + plural(looseMovable.length, 'file') + '</b> ' + what + '. Nothing moves until you approve the plan.' : '');
+      if (markers.length) h += callout('warning', 'alert-triangle', 'This looks like a project folder', '<p>Found ' + markers.map(m => '<code>' + esc(m) + '</code>').join(' ') + '. Organizing a code project usually breaks it.</p>');
+      if (!looseMovable.length) {
+        h += callout('success', 'check-circle', 'Nothing to sort', '<p>Every file is already in a project or one of your own folders. ' + (st.depth !== 'all' ? 'To re-sort inside your folders too, change <a class="mod-link" data-action="settings-organizing">what Onyx sorts</a>.' : 'Choose <b>Flatten</b> below to start over from a flat folder.') + '</p>');
+      }
+      const rec = recommendedStrategy();
+      const others = STRATEGIES.filter(x => x.id !== rec);
+      const progress = S.progress && S.progress.of > 1 ? ' ' + S.progress.batch + '/' + S.progress.of : '';
+      const ok = hotkeyLabel(effectiveHotkey('organize'));
+      h += '<div class="org-step"><span class="org-n">1</span>Choose how to sort</div>' +
+        '<div class="org-ways" role="radiogroup" aria-label="How to sort">' + strategyCard(stratById(rec), true) +
+        '<div class="org-other-title">Other ways</div><div class="org-grid">' + others.map(x => strategyCard(x, false)).join('') + '</div></div>' +
+        '<div class="org-step"><span class="org-n">2</span>Make a plan to review</div>' +
+        '<div class="org-go"><button class="btn mod-cta org-make" data-action="organize"' + (S.busy ? ' disabled' : '') + '>' +
+        (S.busy ? '<span class="spinner"></span>' + (S.strategy === 'smart' ? 'Asking AI…' + progress : 'Planning…') : icon(stratById(S.strategy).icon) + 'Make a plan' + (ok ? '<kbd>' + esc(ok) + '</kbd>' : '')) + '</button>' +
+        '<span class="org-go-note">Uses <b>' + esc(stratById(S.strategy).name) + '</b>. You’ll see every move first.</span></div>';
+      const ai = S.settings.ai, prov = S.settings.providers[ai.provider] || {};
+      h += '<div class="org-links">' +
+        '<a class="mod-link" data-action="settings-rules">' + icon('list-checks', 'xs') + (ruleCount ? plural(ruleCount, 'rule') : 'Add your own rules') + '</a>' +
+        '<a class="mod-link" data-action="settings-ai">' + icon('cpu', 'xs') + (ai.provider === 'off' ? 'AI is off' : 'AI: ' + esc(prov.label || ai.provider)) + '</a>' +
+        '<a class="mod-link" data-action="settings-organizing">' + icon('folder-input', 'xs') + 'What gets sorted</a>' +
+        (V.undo && !V.demo ? '<a class="mod-link" data-action="undo">' + icon('undo-2', 'xs') + 'Undo last organize (' + plural(V.undo.count, 'file') + ', ' + ago(V.undo.at) + ')</a>' : '') + '</div>';
       if (looseMovable.length) {
-        const what = st.depth === 'top' ? 'sitting loose at the top of this folder. Anything already inside a folder stays exactly where it is'
-          : st.depth === 'all' ? 'here, including ones inside your folders. Only bundles (projects, apps, 3D assets with textures) stay together'
-          : 'sitting loose or in general folders like Documents or New folder. Bundles (projects, apps, 3D assets) and your own named folders stay as they are';
-        h += callout('tip', 'sparkles', 'Ready to organize', '<p>Onyx will sort the <b>' + plural(looseMovable.length, 'file') + '</b> ' + what + '. You review every move before it happens.</p>' +
-          '<p style="margin-top:12px"><button class="btn mod-cta" data-action="organize">' + icon(stratById(S.strategy).icon) + 'Organize · ' + esc(stratById(S.strategy).name) + '</button></p>');
-        h += '<h2>Files to sort <span class="muted" style="font-weight:400;font-size:.8em">' + looseMovable.length + '</span></h2><div class="tree" tabindex="0" role="tree" aria-label="Files to sort">' +
+        h += '<details class="org-files"><summary>' + icon('chevron-right', 'xs') + 'Files Onyx will sort <span class="muted">' + looseMovable.length + '</span></summary><div class="tree" tabindex="0" role="tree" aria-label="Files to sort">' +
           treeHTML(buildTree(looseMovable.slice(0, 400).map(f => ({ path: f.path, name: f.name, source: f.path, size: f.size, mtime: f.lastModified })), []), {
             id: 'loose', isOpen: () => true, fileClass: e => S.selected === e.source ? 'is-active' : '',
             fileFlair: e => '<span>' + fmt(e.size) + '</span>',
-          }) + '</div>';
-      } else {
-        h += callout('success', 'check-circle', 'Nothing to sort', '<p>Every file is already in a bundle or one of your own folders. ' + (st.depth !== 'all' ? 'Switch sorting to <a class="mod-link" data-action="settings-organizing">everything except bundles</a> to re-sort inside your folders too, or use <b>Flatten</b> to start over.' : 'Use <b>Flatten</b> to start over from a flat folder.') + '</p>');
+          }) + '</div></details>';
       }
       return h + '</div>';
     }
 
     const moving = P.items.filter(isMoving);
+    const allMoves = P.items.filter(i => i.kind === 'move');
     const existing = existingDirSet();
     const newFolders = new Set();
     for (const it of moving) { let d = dirname(it.target); while (d) { if (!existing.has(d.toLowerCase())) newFolders.add(d.toLowerCase()); d = dirname(d); } }
-    const intoExisting = moving.filter(i => existing.has(dirname(i.target).toLowerCase())).length;
-    const byYou = moving.filter(i => i.by === 'you' || i.by === 'rule').length;
+    const intoExisting = new Set(moving.map(i => dirname(i.target).toLowerCase()).filter(d => d && existing.has(d))).size;
     const strat = stratById(P.strategy);
-    const engine = P.strategy === 'smart' ? (P.ai.used ? '<span class="tag">' + icon('sparkles', 'xs') + esc(P.ai.model || 'AI') + '</span><span class="muted">' + esc(P.ai.providerLabel) + '</span>' : '<span class="tag grey">offline rules (fallback)</span>')
-      : P.strategy === 'rules' ? '<span class="tag grey">offline rules</span>' : '<span class="tag grey">' + esc(strat.name.toLowerCase()) + '</span>';
-    h += '<div class="inline-title">Proposed structure</div>';
-    h += '<div class="metadata"><div class="metadata-title">' + icon('info', 'xs') + 'Properties</div>' +
-      prop(strat.icon, 'strategy', '<span class="tag">' + esc(strat.name) + '</span>') +
-      prop('cpu', 'engine', engine) +
-      prop('folder-input', 'moving', '<span>' + plural(moving.length, 'file') + '</span>' + (intoExisting ? '<span class="muted">· ' + intoExisting + ' into folders you already have</span>' : '')) +
-      prop('folder-plus', 'new folders', String(newFolders.size)) +
-      (byYou ? prop('list-checks', 'your choices', plural(byYou, 'file') + ' placed by your rules or edits') : '') +
-      prop('pin', 'untouched', plural(P.items.length - moving.length, 'file')) + '</div>';
-    if (P.demo) h += callout('', 'flask-conical', 'Demo vault', '<p>These files only exist in memory, so <b>Apply</b> is turned off. Open a real folder to move files.</p>');
-    if (P.strategy === 'smart' && P.ai.error) h += callout('warning', 'alert-triangle', 'AI unavailable, used offline rules', '<p>' + esc(P.ai.error) + '</p><p class="muted">The offline rules still group series, keywords and types. <a class="mod-link" data-action="settings-ai">Choose another AI provider</a> for better results.</p>');
+    const by = P.strategy === 'smart' ? (P.ai.used ? 'planned by ' + esc(P.ai.model || 'AI') : 'offline rules (AI unavailable)') : esc(strat.name.toLowerCase());
+    const lede = !moving.length ? 'Nothing needs to move with this way of sorting.' :
+      'Move <b>' + plural(moving.length, 'file') + '</b> into ' + (newFolders.size ? '<b>' + plural(newFolders.size, 'new folder') + '</b>' : '') + (newFolders.size && intoExisting ? ' and ' : '') + (intoExisting ? plural(intoExisting, 'folder') + ' you already have' : '') + (!newFolders.size && !intoExisting ? 'the top level' : '') +
+      '.' + (P.items.length - moving.length ? ' ' + plural(P.items.length - moving.length, 'file') + (P.items.length - moving.length === 1 ? ' stays where it is.' : ' stay where they are.') : '');
+    h += head('Review the plan · ' + by, lede);
+    if (P.demo) h += callout('', 'flask-conical', 'Demo folder', '<p>These files only exist in memory, so <b>Apply</b> is turned off. Open a real folder to move files.</p>');
+    if (P.strategy === 'smart' && P.ai.error) h += callout('warning', 'alert-triangle', 'AI unavailable, used offline rules', '<p>' + esc(P.ai.error) + '</p><p class="muted"><a class="mod-link" data-action="settings-ai">Choose another AI provider</a> for better results.</p>');
     if (P.ai && P.ai.used && P.ai.summary) h += callout('example', 'sparkles', 'Why this structure', '<p>' + esc(P.ai.summary) + '</p>');
+    else if (moving.length) h += callout('example', strat.icon, 'Why this structure', '<p>' + esc(strat.desc) + '.' + (ruleCount ? ' Your ' + plural(ruleCount, 'rule') + ' were applied first.' : '') + '</p>');
     if (P.rootMarkers && P.rootMarkers.length) h += callout('warning', 'alert-triangle', 'This looks like a project folder', '<p>Found ' + P.rootMarkers.map(m => '<code>' + esc(m) + '</code>').join(' ') + '. Double-check before applying.</p>');
     if (P.strategy === 'flatten' && moving.length) h += callout('warning', 'alert-triangle', 'Flatten removes your folder structure', '<p>Files inside project folders are left alone, but every other subfolder gets emptied. You can undo it afterwards.</p>');
-    if (!moving.length) h += callout('success', 'check-circle', 'Already tidy', '<p>Nothing needs to move with this strategy.</p>');
-    h += '<h2>Structure</h2><p class="muted" style="font-size:.86em;margin-top:-4px">Right-click a file or folder to move it somewhere else, rename a new folder, or keep files in place.</p><div class="tree" id="proposedTree" tabindex="0" role="tree" aria-label="Proposed structure">' + proposedTreeHTML() + '</div>';
-    return h + '</div>';
+    const mode = S.orgView === 'list' ? 'list' : 'tree';
+    h += '<div class="org-toolbar"><div class="seg" role="tablist"><button class="seg-btn' + (mode === 'tree' ? ' is-active' : '') + '" data-action="org-view" data-v="tree" role="tab" aria-selected="' + (mode === 'tree') + '">' + icon('folder-tree', 'xs') + 'Folders</button>' +
+      '<button class="seg-btn' + (mode === 'list' ? ' is-active' : '') + '" data-action="org-view" data-v="list" role="tab" aria-selected="' + (mode === 'list') + '">' + icon('list', 'xs') + 'Every move</button></div>' +
+      '<span class="spacer"></span>' +
+      (mode === 'tree' ? btnIcon('expand-proposed', 'chevrons-up-down', 'Expand all') + btnIcon('collapse-proposed', 'chevrons-down-up', 'Collapse all') : '') +
+      '<a class="mod-link" data-action="view-graph">' + icon('git-fork', 'xs') + 'Explore as graph</a></div>';
+    if (mode === 'tree') h += '<p class="org-hint">Right-click a file or folder to send it somewhere else, rename a new folder, or keep files in place.</p><div class="tree" id="proposedTree" tabindex="0" role="tree" aria-label="Proposed structure">' + proposedTreeHTML() + '</div>';
+    else h += changesHTML(true);
+    const sel = allMoves.filter(i => !i.skip).length;
+    h += '</div><div class="org-bar"><div class="org-bar-inner"><span class="org-bar-text">' + (allMoves.length ? sel + ' of ' + plural(allMoves.length, 'move') + ' selected' : 'Nothing to move') + '<span class="muted"> · you can undo it</span></span><span class="spacer"></span>' +
+      '<button class="btn" data-action="discard">Discard</button>' +
+      '<button class="btn" data-action="organize-again">' + icon('refresh-cw', 'xs') + 'Try another way</button>' +
+      '<button class="btn mod-cta" data-action="apply"' + (P.demo || !moving.length || S.busy ? ' disabled' : '') + '>' + icon('check') + 'Apply ' + (moving.length ? plural(moving.length, 'move') : '') + '</button></div></div>';
+    return h;
   }
 
   function proposedTreeHTML() {
@@ -530,13 +605,13 @@
       fileTip: e => {
         const it = e.item;
         if (it.skip) return 'Kept in place (you excluded it)';
-        if (it.kind === 'move') return it.reason + '\nFrom: ' + (dirname(it.source) || 'top level') + (basename(it.source) !== basename(it.target) ? '\nRenamed: ' + basename(it.target) : '');
+        if (it.kind === 'move') return it.reason + '\nFrom: ' + (dirname(it.source) || S.vault.vaultName) + (basename(it.source) !== basename(it.target) ? '\nRenamed: ' + basename(it.target) : '');
         return it.reason;
       },
     });
   }
 
-  function changesHTML() {
+  function changesHTML(embedded) {
     const P = S.plan;
     if (!P) {
       return '<div class="empty-state"><div class="empty-inner"><h1 style="font-size:20px">No changes yet</h1><div class="sub">Run Organize to get a list of every move Onyx would make. You can untick anything, send files somewhere else, or turn a choice into a rule.</div>' +
@@ -549,7 +624,7 @@
     for (const it of shown) { const d = dirname(it.target) || '(top level)'; if (!groups.has(d)) groups.set(d, []); groups.get(d).push(it); }
     const existing = existingDirSet();
     const sel = all.filter(i => !i.skip).length;
-    let h = '<div class="changes"><div class="changes-toolbar">' +
+    let h = '<div class="changes' + (embedded ? ' is-embedded' : '') + '"><div class="changes-toolbar">' +
       '<div class="search-wrap">' + icon('search', 'xs') + '<input class="search-input" id="changesFilter" placeholder="Filter changes…" aria-label="Filter changes" spellcheck="false" value="' + esc(S.changesFilter) + '"></div>' +
       '<a class="mod-link" data-action="select-all" tabindex="0">Select all</a><a class="mod-link" data-action="select-none" tabindex="0">None</a>' +
       '<span class="summary">' + sel + ' of ' + all.length + ' moves selected</span></div>';
@@ -557,13 +632,14 @@
     else if (!shown.length) h += '<p class="muted" style="padding:20px 8px">No changes match “' + esc(q) + '”.</p>';
     for (const [dir, items] of [...groups.entries()].sort((a, b) => collator.compare(a[0], b[0]))) {
       const isNew = dir !== '(top level)' && !existing.has(dir.toLowerCase());
-      h += '<div class="change-group"><div class="change-group-title">' + icon('folder') + '<span class="g-name" title="' + esc(dir) + '">' + esc(dir) + '</span>' + (isNew ? '<span class="pill new">new</span>' : '<span class="pill in">existing</span>') +
+      const dirLabel = dir === '(top level)' ? S.vault.vaultName + ' (top)' : dir;
+      h += '<div class="change-group"><div class="change-group-title">' + icon('folder') + '<span class="g-name" title="' + esc(dirLabel) + '">' + esc(dirLabel) + '</span>' + (isNew ? '<span class="pill new">new</span>' : '<span class="pill in">existing</span>') +
         '<span class="g-actions"><span>' + items.length + '</span>' + (isNew ? '<button class="clickable-icon" data-action="rename-folder" data-path="' + esc(dir) + '" data-tip="Rename this folder" aria-label="Rename folder">' + icon('pencil') + '</button>' : '') +
         '<button class="clickable-icon" data-action="move-group" data-path="' + esc(dir) + '" data-tip="Move all of these to another folder" aria-label="Move group">' + icon('folder-input') + '</button></span></div>';
       for (const it of items.sort((a, b) => collator.compare(a.name, b.name))) {
         h += '<div class="change-row' + (it.skip ? ' is-skipped' : '') + (S.selected === it.source ? ' is-active' : '') + '" data-source="' + esc(it.source) + '">' +
           '<input type="checkbox" class="checkbox" aria-label="Move ' + esc(it.name) + '" data-toggle-skip="' + esc(it.source) + '"' + (it.skip ? '' : ' checked') + '>' +
-          '<div class="c-name">' + icon(fileIconName(it.extension)) + '<span title="' + esc(it.source) + '">' + esc(it.source) + '</span></div>' +
+          '<div class="c-name">' + icon(fileIconName(it.extension)) + '<span title="' + esc(it.source) + '">' + esc(it.name) + (dirname(it.source) ? '<span class="c-from"> from ' + esc(dirname(it.source)) + '/</span>' : '') + '</span></div>' +
           '<div class="c-arrow">' + icon('arrow-right', 'xs') + '</div>' +
           '<div class="c-reason" title="' + esc(it.reason) + '">' + esc(basename(it.target) !== it.name ? 'as ' + basename(it.target) + ' · ' : '') + esc(it.reason) + '</div>' +
           '<button class="clickable-icon c-more" data-action="row-menu" data-source="' + esc(it.source) + '" aria-label="More actions for ' + esc(it.name) + '">' + icon('more-horizontal') + '</button></div>';
@@ -745,9 +821,8 @@
     const V = S.vault, P = S.plan;
     let h = '';
     if (S.busy) h += '<div class="status-bar-item"><span class="spinner" style="width:11px;height:11px;border-width:1.5px"></span>' + (S.strategy === 'smart' ? 'Asking AI' : 'Working') + '</div>';
-    if (P) { const n = P.items.filter(isMoving).length; h += '<div class="status-bar-item clickable accent" data-action="view-changes">' + icon('arrow-left-right') + plural(n, 'change') + ' pending</div>'; }
+    if (P) { const n = P.items.filter(isMoving).length; h += '<div class="status-bar-item clickable accent" data-action="view-structure">' + icon('arrow-left-right') + plural(n, 'change') + ' pending</div>'; }
     if (V && V.browse) h += '<div class="status-bar-item" data-tip="Browse only: Onyx won’t reorganize this location">' + icon('shield-check') + 'Browsing ' + esc(V.rootPath) + '</div>';
-    else if (V) h += '<div class="status-bar-item">' + plural(V.files.length, 'file') + '</div><div class="status-bar-item">' + plural(V.dirs.length, 'folder') + '</div>';
     const r = T.resolve(S.settings ? S.settings.ui : {});
     h += '<div class="status-bar-item clickable" data-action="theme-menu" data-tip="Appearance">' + icon('palette') + esc(r.p.name) + '</div>';
     if (S.settings) {
@@ -758,7 +833,7 @@
     $('#statusBar').innerHTML = h;
   }
 
-  function renderAll() { renderTabs(); renderExplorer(); renderView(); renderSide(); renderStatus(); }
+  function renderAll() { document.body.classList.toggle('no-vault', !S.vault); renderTabs(); renderExplorer(); renderView(); renderSide(); renderStatus(); }
 
   // ======================================================================= selection sync
   function select(source, from) {
@@ -921,8 +996,9 @@
   // ======================================================================= vault actions
   async function loadSettings() { S.settings = await api.getSettings(); S.settings.ui = S.settings.ui || {}; }
   function setVault(v) {
+    closePlaces();
     S.vault = v; S.plan = null; S.selected = null; S.explorerOpen = new Set(); S.proposedOpen = new Set();
-    S.explorerFilter = ''; $('#explorerFilter').value = '';
+    S.explorerFilter = '';
   }
   async function afterOpen(r, quiet) {
     if (!r || r.cancelled) return;
@@ -944,27 +1020,47 @@
   }
   async function openFolder() { afterOpen(await api.pickFolder()); }
   async function openFolderPath(p) { const r = await api.openRecent(p); if (r && r.error) { modal({ title: 'Can’t open this folder', html: '<p>' + esc(r.error) + '</p>', buttons: [{ label: 'OK', cls: 'mod-cta' }] }); return; } afterOpen(r); }
-  // This PC: drives and the usual folders
+  // This PC: a page over the Library with recent folders, drives and the usual folders
+  function pcHost() {
+    const root = document.querySelector('.view-root[data-view="library"]');
+    let pg = root.querySelector('.pc-page');
+    if (!pg) { pg = document.createElement('div'); pg.className = 'pc-page'; pg.tabIndex = -1; root.appendChild(pg); }
+    return pg;
+  }
+  function closePlaces() { if (!S.pcOpen) return; S.pcOpen = false; const pg = document.querySelector('.pc-page'); if (pg) pg.remove(); if (S.vault) LIB.renderTagsPanel(); }
   async function openPlaces() {
-    const r = await api.listPlaces();
+    S.pcOpen = true;
+    if (!WS.isVisible('library')) WS.activate('library');
+    renderPlaces(); if (S.vault) LIB.renderTagsPanel();
+    try { S.placesData = await api.listPlaces(); } catch { S.placesData = S.placesData || { drives: [], places: [] }; }
+    if (S.pcOpen) renderPlaces();
+  }
+  function renderPlaces() {
+    if (!S.pcOpen) return;
+    const pg = pcHost(), r = S.placesData;
     const gb = n => n ? (n / 1073741824 >= 100 ? Math.round(n / 1073741824) : (n / 1073741824).toFixed(1)) + ' GB' : '';
     const drive = d => {
       const used = d.total ? Math.round((1 - d.free / d.total) * 100) : 0;
       return '<button class="place drive" data-place="' + esc(d.path) + '">' + icon('hard-drive') + '<div class="pl-main"><div class="pl-name">' + esc(d.name === 'Computer' ? 'Computer' : 'Local Disk (' + d.name + ')') + '</div>' +
         (d.total ? '<div class="pl-bar"><span style="width:' + used + '%"' + (used > 90 ? ' class="full"' : '') + '></span></div><div class="pl-sub">' + gb(d.free) + ' free of ' + gb(d.total) + '</div>' : '<div class="pl-sub">Browse only</div>') + '</div></button>';
     };
-    const place = p => '<button class="place" data-place="' + esc(p.path) + '">' + icon(p.name === 'Home' ? 'folder' : p.name === 'Pictures' ? 'image' : p.name === 'Music' ? 'music' : p.name === 'Videos' ? 'film' : p.name === 'Downloads' ? 'download' : 'folder') +
+    const place = p => '<button class="place" data-place="' + esc(p.path) + '">' + icon(p.name === 'Pictures' ? 'image' : p.name === 'Music' ? 'music' : p.name === 'Videos' ? 'film' : p.name === 'Downloads' ? 'download' : 'folder') +
       '<div class="pl-main"><div class="pl-name">' + esc(p.name) + '</div><div class="pl-sub">' + (p.browseOnly ? 'Browse only' : 'Browse and organize') + '</div></div></button>';
-    const m = modal({
-      title: 'This PC', cls: 'mod-places',
-      html: '<p class="muted" style="margin-bottom:12px">Drives and system folders open <b>browse-only</b>: explore, search and tag everything, but Onyx won’t reorganize them. Ordinary folders like Downloads can be organized.</p>' +
+    const recent = (S.settings && S.settings.ui && S.settings.ui.recent) || [];
+    pg.innerHTML = '<div class="pc-inner"><div class="pc-head">' + (S.vault ? '<button class="clickable-icon" data-action="places-back" data-tip="Back to ' + esc(S.vault.vaultName) + '" aria-label="Back">' + icon('arrow-left') + '</button>' : '') +
+      '<h1>' + icon('monitor') + 'This PC</h1><span class="spacer"></span><button class="btn" data-action="open-folder">' + icon('folder-open') + 'Open another folder…</button></div>' +
+      (recent.length ? '<div class="pl-title">Recent folders</div><div class="pl-recent">' + recentHTML('recent-row') + '</div>' : '') +
+      (!r ? '<div class="pc-loading"><span class="spinner"></span>Looking for drives…</div>' :
         '<div class="pl-title">Drives</div><div class="pl-grid">' + (r.drives || []).map(drive).join('') + '</div>' +
-        '<div class="pl-title">Folders</div><div class="pl-grid">' + (r.places || []).map(place).join('') + '</div>',
-    });
-    m.box.addEventListener('click', e => { const b = e.target.closest('[data-place]'); if (!b) return; m.close(); openFolderPath(b.dataset.place); });
+        '<div class="pl-title">Folders</div><div class="pl-grid">' + (r.places || []).map(place).join('') + '</div>') +
+      '<p class="pc-note">' + icon('shield-check', 'xs') + '<span><b>Browse only</b> means you can explore, search, tag and use file operations, but Onyx won’t propose reorganizing it. Drives and system folders open this way; ordinary folders like Downloads can be organized.</span></p></div>';
   }
+  document.addEventListener('click', e => {
+    const b = e.target.closest('.pc-page [data-place]'); if (!b) return;
+    e.stopPropagation(); const p = b.dataset.place; closePlaces(); openFolderPath(p);
+  }, true);
   async function openRecent(p, quiet) { const r = await api.openRecent(p); if (r.error) { if (!quiet) notice(esc(r.error), 'error'); return; } afterOpen(r, quiet); }
-  async function loadDemo() { const r = await api.loadDemo(); setVault(r); renderAll(); notice('Demo vault loaded. Nothing on your disk will be touched.', 'success'); }
+  async function loadDemo() { const r = await api.loadDemo(); setVault(r); renderAll(); notice('Demo folder loaded. Nothing on your disk will be touched.', 'success'); }
   async function rescan() {
     if (!S.vault) return;
     if (S.vault.browse) { LIB.reload(); notice('Reloaded from disk'); return; }
@@ -990,8 +1086,9 @@
     for (const it of S.plan.items) if (isMoving(it)) openAncestors(S.proposedOpen, it.target);
     if (S.selected) { const it = planBySource().get(S.selected); if (it) openAncestors(S.proposedOpen, effTarget(it)); }
     if (S.plan.strategy === 'smart' && S.plan.ai.error) notice('AI unavailable, used offline rules instead.', 'warn', 6000);
-    const after = UI().layout.afterOrganize;
-    if (after && !WS.isVisible(after)) WS.activate(after, { noRender: true });
+    let after = UI().layout.afterOrganize || 'structure';
+    if (after === 'changes') { S.orgView = 'list'; after = 'structure'; } else if (after === 'structure') S.orgView = store.get('orgView', 'tree');
+    if (!WS.isVisible(after)) WS.activate(after, { noRender: true });
     renderAll();
   }
   function confirmApply() {
@@ -1035,13 +1132,12 @@
     if (r.failed && r.failed.length) notice('Restored ' + plural(r.restored, 'file') + '. ' + r.failed.length + ' couldn’t be restored.', 'warn', 7000);
     else notice('Restored ' + plural(r.restored, 'file'), 'success');
   }
-  function setStrategy(id) { S.strategy = id; store.set('strategy', id); renderSide(); if (!S.plan && S.vault && WS.isVisible('structure')) renderOne('structure'); }
+  function setStrategy(id) { S.strategy = id; store.set('strategy', id); if (WS.isVisible('organize')) renderSide(); if (!S.plan && S.vault && WS.isVisible('structure')) renderOne('structure'); }
   function toggleSidebar(side) { WS.toggleDock(side); }
   // the Organize panel lives in a sidebar that stays hidden until you need it
   function openOrganize(toggle) {
-    const k = WS.keyOf('organize');
-    if (toggle && WS.isVisible('organize') && (k === 'left' || k === 'right')) { WS.toggleDock(k); return; }
-    WS.activate('organize');
+    if (S.vault && S.vault.browse) { notice('This location is browse-only. In the Library, right-click a folder and choose <b>Organize this folder</b>.', 'warn', 6000); return; }
+    WS.activate('structure');
   }
   function layoutMenu(el) {
     const r = el.getBoundingClientRect();
@@ -1061,7 +1157,7 @@
     if (recent.length) { items.push({ heading: 'Recent' }); for (const p of recent) items.push({ label: p.split(/[\\/]/).filter(Boolean).pop() || p, sub: p, icon: 'folder', action: () => openRecent(p) }); items.push('sep'); }
     items.push({ label: 'Open folder…', icon: 'folder-open', action: openFolder });
     items.push({ label: 'Browse This PC…', icon: 'monitor', sub: 'drives', action: openPlaces });
-    items.push({ label: 'Open demo vault', icon: 'flask-conical', action: loadDemo });
+    items.push({ label: 'Open the demo folder', icon: 'flask-conical', action: loadDemo });
     if (S.vault && !S.vault.demo) items.push({ label: 'Show in system explorer', icon: 'external-link', action: () => api.reveal('') });
     showMenu(items, r.left, r.top, { above: true });
   }
@@ -1082,15 +1178,15 @@
   // ======================================================================= commands + hotkeys
   const COMMANDS = [
     { id: 'palette', name: 'Open command palette', hk: 'Mod+P', run: () => openPalette() },
-    { id: 'open-folder', name: 'Open folder as vault', hk: 'Mod+O', run: openFolder },
-    { id: 'demo', name: 'Open demo vault', run: loadDemo },
-    { id: 'places', name: 'Files: Browse This PC (drives)', run: () => openPlaces() },
-    { id: 'organize', name: 'Organize: Run with current strategy', hk: 'Mod+Enter', run: () => organize() },
+    { id: 'open-folder', name: 'Open a folder', hk: 'Mod+O', run: openFolder },
+    { id: 'demo', name: 'Open the demo folder', run: loadDemo },
+    { id: 'places', name: 'Go: This PC', run: () => openPlaces() },
+    { id: 'organize', name: 'Organize: Make a plan', hk: 'Mod+Enter', run: () => organize() },
     ...STRATEGIES.map(s => ({ id: 'organize-' + s.id, name: 'Organize: ' + s.name, run: () => organize(s.id) })),
     { id: 'apply', name: 'Plan: Apply changes', hk: 'Mod+Shift+Enter', run: () => confirmApply() },
     { id: 'discard', name: 'Plan: Discard proposed changes', run: () => { S.plan = null; renderAll(); } },
     { id: 'view-structure', name: 'View: Proposed structure', hk: 'Mod+1', run: () => WS.activate('structure') },
-    { id: 'view-changes', name: 'View: Changes', hk: 'Mod+2', run: () => WS.activate('changes') },
+    { id: 'view-changes', name: 'View: Changes', hk: 'Mod+2', run: () => showMoves() },
     { id: 'view-graph', name: 'View: Graph view', hk: 'Mod+G', run: () => WS.activate('graph') },
     { id: 'view-files', name: 'View: Files', hk: 'Mod+Shift+E', run: () => { WS.activate('files'); focusTree($('#explorer')); } },
     { id: 'view-organize', name: 'View: Organize panel', run: () => openOrganize() },
@@ -1118,7 +1214,7 @@
     { id: 'properties', name: 'Files: Properties (Alt+Enter)', run: () => window.OnyxOps.properties() },
     { id: 'terminal', name: 'Files: Open in Terminal', run: () => window.OnyxOps && S.vault && api.fsTerminal(LIB.cwd).then(r => r && r.error && notice(esc(r.error), 'error')) },
     { id: 'rescan', name: 'Files: Reload folder from disk', hk: 'Mod+R', run: rescan },
-    { id: 'search-files', name: 'Files: Search files', hk: 'Mod+Shift+F', run: () => { WS.activate('files'); $('#navSearch').classList.add('show'); $('#explorerFilter').focus(); } },
+    { id: 'search-files', name: 'Files: Search files', hk: 'Mod+Shift+F', run: () => searchLibrary() },
     { id: 'collapse-explorer', name: 'Files: Collapse all', run: () => { S.explorerOpen.clear(); renderExplorer(); } },
     { id: 'reveal-root', name: 'Files: Show vault in system explorer', run: () => { if (S.vault && !S.vault.demo) api.reveal(''); else notice('Open a real folder first', 'warn'); } },
     { id: 'toggle-left', name: 'Layout: Toggle left sidebar', hk: 'Mod+[', run: () => toggleSidebar('left') },
@@ -1176,6 +1272,7 @@
     if (e.key === 'Escape') {
       if (menuEl) { closeMenu(); return; }
       if (modals.length) { modals[modals.length - 1].close(); return; }
+      if (S.pcOpen && S.vault && !typing) { closePlaces(); return; }
     }
     const combo = comboFromEvent(e);
     if (!combo) return;
@@ -1233,6 +1330,8 @@
   const ACTIONS = {
     'toggle-organize': () => openOrganize(true), 'open-folder': openFolder, 'demo': loadDemo, 'places': () => openPlaces(), 'organize': () => organize(), 'apply': confirmApply, 'undo': confirmUndo, 'rescan': rescan,
     'discard': () => { S.plan = null; renderAll(); },
+    'organize-again': () => { S.plan = null; renderAll(); WS.activate('structure'); },
+    'org-view': (el) => { S.orgView = el.dataset.v; store.set('orgView', S.orgView); renderOne('structure'); },
     'settings': () => openSettings(), 'settings-ai': () => openSettings('ai'), 'settings-organizing': () => openSettings('organizing'), 'settings-appearance': () => openSettings('appearance'), 'settings-rules': () => openSettings('rules'),
     'palette': () => openPalette(), 'help': () => openHelp(),
     'toggle-left': () => toggleSidebar('left'), 'toggle-right': () => toggleSidebar('right'),
@@ -1240,12 +1339,14 @@
     'close-view': (el) => WS.closeView(el.dataset.view),
     'collapse-dock': (el) => WS.toggleDock(el.dataset.region),
     'layout-menu': (el) => layoutMenu(el),
-    'toggle-search': () => { if (!WS.isVisible('files')) WS.activate('files'); const s = $('#navSearch'); s.classList.toggle('show'); if (s.classList.contains('show')) $('#explorerFilter').focus(); else { S.explorerFilter = ''; $('#explorerFilter').value = ''; renderExplorer(); } },
+    'toggle-search': () => searchLibrary(),
     'collapse-explorer': () => { S.explorerOpen.clear(); renderExplorer(); },
     'reveal-root': () => runCommand('reveal-root'),
     'vault-menu': (el) => vaultMenu(el), 'theme-menu': (el) => themeMenu(el),
-    'view-structure': () => WS.activate('structure'), 'view-changes': () => WS.activate('changes'), 'view-graph': () => WS.activate('graph'),
-    'view-library': () => LIB.showLibrary(), 'quick-find': () => LIB.quickFind(), 'lib-autotag': (el) => LIB.autoTagMenu(el),
+    'view-structure': () => WS.activate('structure'), 'view-changes': () => showMoves(), 'view-graph': () => WS.activate('graph'),
+    'view-library': () => { closePlaces(); if (S.vault) LIB.showLibrary(); else WS.activate('library'); },
+    'places-back': () => closePlaces(),
+    'recent-remove': async (el) => { const left = await api.recentRemove(el.dataset.path); if (S.settings && S.settings.ui) S.settings.ui.recent = left || []; if (S.pcOpen) renderPlaces(); if (!S.vault) renderAll(); }, 'quick-find': () => LIB.quickFind(), 'lib-autotag': (el) => LIB.autoTagMenu(el),
     'lib-ai-untagged': () => LIB.autoTag('ai', { scope: 'untagged' }),
     'lib-clear-auto': () => runCommand('clear-auto'),
     'set-strategy': (el) => setStrategy(el.dataset.id),
@@ -1278,7 +1379,13 @@
     if (row) {
       // like Explorer's navigation pane: the tree drives the Library when it's open
       const drive = row.dataset.tree === 'explorer' && WS.isVisible('library');
-      if (row.dataset.kind === 'folder') { toggleFolder(row); if (drive) LIB.go(row.dataset.path); }
+      if (row.dataset.kind === 'folder' && row.dataset.tree === 'explorer') {
+        // the arrow opens and closes; the name opens the folder in the Library
+        if (e.target.closest('.collapse-icon') && !row.dataset.root) { toggleFolder(row); return; }
+        if (!WS.isVisible('library')) LIB.showLibrary();
+        if (!row.dataset.root && !S.explorerOpen.has(row.dataset.path)) { S.explorerOpen.add(row.dataset.path); if (S.vault && S.vault.browse && !LIB.isListed(row.dataset.path)) LIB.ensureListed(row.dataset.path); }
+        LIB.go(row.dataset.path); renderExplorer();
+      } else if (row.dataset.kind === 'folder') { toggleFolder(row); if (drive) LIB.go(row.dataset.path); }
       else { select(row.dataset.source, row.dataset.tree === 'explorer' ? 'explorer' : 'view'); if (drive) LIB.revealFile(row.dataset.source); }
       return;
     }
@@ -1299,8 +1406,8 @@
     const isFile = row.classList.contains('change-row') || row.dataset.kind === 'file';
     showMenu(isFile ? fileMenuItems(row.dataset.source) : folderMenuItems(row.dataset.path, row.dataset.tree), e.clientX, e.clientY);
   });
-  $('#explorerFilter').addEventListener('input', e => { S.explorerFilter = e.target.value; renderExplorer(); });
-  $('#explorerFilter').addEventListener('keydown', e => { if (e.key === 'Escape') { S.explorerFilter = ''; e.target.value = ''; $('#navSearch').classList.remove('show'); renderExplorer(); e.stopPropagation(); } if (e.key === 'ArrowDown') { focusTree($('#explorer')); e.preventDefault(); } });
+  function showMoves() { S.orgView = 'list'; if (WS.isVisible('structure')) renderOne('structure'); else WS.activate('structure'); }
+  function searchLibrary() { if (!S.vault) return; LIB.showLibrary(); requestAnimationFrame(() => { const i = $('#libSearch'); if (i) { i.focus(); i.select(); } }); }
 
   // ======================================================================= drag a folder onto the window
   let dragDepth = 0;
@@ -1329,7 +1436,7 @@
   LIB.init({
     get S() { return S; }, api, E, T, WS, UI, setUi, modal, notice, esc, icon, confirmModal, textPrompt, showMenu, fuzzy, collator, fmt, isMac,
     emptyState: () => emptyStateHTML(),
-    openPlaces: () => openPlaces(), openFolderPath: (p) => openFolderPath(p),
+    openPlaces: () => openPlaces(), closePlaces: () => closePlaces(), syncTree: () => { closePlaces(); if (WS.isVisible('files')) renderExplorer(); }, openFolderPath: (p) => openFolderPath(p),
     renderExplorer: () => renderExplorer(), renderAll: () => renderAll(), select: (p, from) => select(p, from), openSettings: (t) => openSettings(t),
     organizeUndo: () => confirmUndo(), openOrganize: () => openOrganize(), rescan: () => rescan(),
   });
@@ -1435,16 +1542,13 @@
       renderAll: () => renderAll(),
       saveWorkspace: (w) => { S.settings.ui.workspace = w; persist('workspace', 'ui'); },
     }, UI().workspace);
-    if (!store.get('layoutV3', false)) { store.set('layoutV3', true); WS.declutter(); }
+    if (!store.get('layoutV4', false)) { store.set('layoutV4', true); store.set('layoutV3', true); WS.declutter(); }
     // 2.7: double-click previews in Onyx (only if it was still on the old default)
     if (!store.get('previewV1', false)) { store.set('previewV1', true); if (UI().library.dblClick === 'open') setUi('library', 'dblClick', 'preview'); }
     applyTheme();
     renderAll();
     const recent = S.settings.ui.recent || [];
     if (UI().layout.reopenLast && recent[0]) openRecent(recent[0], true);
-    if (!store.get('seenLibrary', false)) {
-      store.set('seenLibrary', true);
-      setTimeout(() => notice('<b>New: Library and tags.</b> Search everything, tag files, and find them again with ' + esc(hotkeyLabel(effectiveHotkey('quick-find'))) + '.', '', 9000, { label: 'Open Library', run: () => LIB.showLibrary() }), 1200);
-    }
+
   })();
 })();

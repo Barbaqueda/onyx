@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld('onyx', {
   platform: process.platform,
   pickFolder: () => ipcRenderer.invoke('pick-folder'),
   openRecent: (p) => ipcRenderer.invoke('open-recent', p),
+  recentRemove: (p) => ipcRenderer.invoke('recent-remove', p),
   openPath: (p) => ipcRenderer.invoke('open-path', p),
   pathForFile: (file) => { try { return webUtils.getPathForFile(file); } catch { return ''; } },
   loadDemo: () => ipcRenderer.invoke('load-demo'),

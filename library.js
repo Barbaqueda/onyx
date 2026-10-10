@@ -4,7 +4,9 @@
   const TG = window.OnyxTags, E = window.OnyxEngine;
   const $ = s => document.querySelector(s);
   const DAY = 86400000;
-  const ROW = 32, GROUP = 36, TILE_W = 150, TILE_H = 178, OVERSCAN = 400;
+  const ROW = 32, GROUP = 36, OVERSCAN = 400;
+  const TILES = { s: [118, 150], m: [150, 178], l: [210, 236] };
+  const tileW = () => (TILES[U().tile] || TILES.m)[0], tileH = () => (TILES[U().tile] || TILES.m)[1];
   const EXEC = /\.(exe|msi|bat|cmd|com|ps1|vbs|vbe|js|jse|wsf|wsh|scr|pif|lnk|reg|hta|cpl|jar|msix|appx)$/i;
 
   let C = null;
@@ -35,7 +37,27 @@
     const cols = tagState().colors || {};
     if (has(cols, t)) return cols[t];
     const root = t.split('/')[0];
-    return has(cols, root) ? cols[root] : TG.hashColor(root, palette());
+    return has(cols, root) ? cols[root] : autoColor(root);
+  }
+  // tags without a chosen colour: the most-used ones each get a different colour from the palette
+  let rankCols = null, rankOf = null;
+  function autoColor(root) {
+    const ts = tagState();
+    if (!rankCols || rankOf !== ts) {
+      rankOf = ts; rankCols = new Map();
+      const pal = palette(), n = pal.length, counts = new Map();
+      for (const e of Object.values(ts.files || {})) for (const t of (e && e.t) || []) { const r = t.split('/')[0]; counts.set(r, (counts.get(r) || 0) + 1); }
+      const chosen = new Set(Object.values(ts.colors || {}));
+      let used = new Set([...chosen].filter(c => pal.includes(c)));
+      for (const [r] of [...counts.entries()].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))) {
+        if (used.size >= n) used = new Set();
+        const start = pal.indexOf(TG.hashColor(r, pal));
+        let pick = pal[start];
+        for (let i = 0; i < n; i++) { const c = pal[(start + i) % n]; if (!used.has(c)) { pick = c; break; } }
+        used.add(pick); rankCols.set(r, pick);
+      }
+    }
+    return rankCols.get(root) || TG.hashColor(root, palette());
   }
   function chip(t, opts) {
     opts = opts || {};
@@ -55,6 +77,50 @@
     return new Date(ts).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
   }
   const fullDate = ts => new Date(ts).toLocaleString(undefined, { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  // one format for the whole column, like Explorer (relative time is in the tooltip)
+  const dateTime = ts => ts ? new Date(ts).toLocaleString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+  const TYPE_NAMES = { txt: 'Text document', md: 'Markdown document', doc: 'Word document', docx: 'Word document', xls: 'Excel spreadsheet', xlsx: 'Excel spreadsheet', csv: 'CSV file',
+    ppt: 'PowerPoint presentation', pptx: 'PowerPoint presentation', pdf: 'PDF document', exe: 'Application', msi: 'Windows installer', zip: 'ZIP archive', rar: 'RAR archive', '7z': '7-Zip archive',
+    lnk: 'Shortcut', json: 'JSON file', html: 'HTML page', htm: 'HTML page', js: 'JavaScript file', py: 'Python file', css: 'CSS file', crdownload: 'Unfinished download', part: 'Unfinished download' };
+  const GROUP_NOUN = { Images: 'image', Documents: 'document', Videos: 'video', Audio: 'audio', Code: 'file', Archives: 'archive', '3D Models': '3D model', Design: 'design file', Installers: 'installer', eBooks: 'e-book', Fonts: 'font' };
+  function typeLabel(f) {
+    const x = (f.extension || '').toLowerCase();
+    if (TYPE_NAMES[x]) return TYPE_NAMES[x];
+    const k = E.kindLabel(x);
+    if (/[A-Z]/.test(k)) return k;                       // app names: "FL Studio preset"
+    return x ? x.toUpperCase() + ' ' + (GROUP_NOUN[E.typeGroup(x)] || 'file') : 'File';
+  }
+  // tags in the list: a dot per tag and the main tag's name (full chips on request)
+  function tagCell(f) {
+    const tags = tagsOf(f.path);
+    if (!tags.length) return '';
+    const auto = new Set(autoOf(f.path));
+    if (U().tagStyle === 'chips') return tags.slice(0, 2).map(t => chip(t, { auto: auto.has(t) })).join('') + (tags.length > 2 ? '<span class="tc-more">+' + (tags.length - 2) + '</span>' : '');
+    return '<span class="lr-dots" aria-hidden="true">' + tags.slice(0, 4).map(t => '<span style="--tc:' + tagColor(t) + '"></span>').join('') + '</span>' +
+      '<span class="lr-tagname">' + esc(tags[0]) + (tags.length > 1 ? '<span class="lr-tagmore"> +' + (tags.length - 1) + '</span>' : '') + '</span>';
+  }
+  const COLS = {
+    name: { label: 'Name', sort: 'name', min: 200 },
+    tags: { label: 'Tags', w: 140, min: 70 },
+    type: { label: 'Type', sort: 'type', w: 128, min: 70 },
+    folder: { label: 'Folder', sort: 'folder', w: 160, min: 70 },
+    modified: { label: 'Date modified', sort: 'modified', w: 158, min: 110 },
+    size: { label: 'Size', sort: 'size', w: 84, min: 56 },
+  };
+  const COL_ORDER = ['name', 'tags', 'type', 'folder', 'modified', 'size'];
+  const DROP_ORDER = ['folder', 'type', 'tags', 'modified'];        // what goes first when the list gets narrow
+  const colPrefs = () => Object.assign({ tags: true, type: true, modified: true, size: true }, U().cols || {});
+  const colWidth = k => (L.colwLive && L.colwLive[k]) || (U().colw || {})[k] || COLS[k].w;
+  function visibleCols() {
+    const p = colPrefs();
+    let cols = COL_ORDER.filter(k => k === 'name' || (k === 'folder' ? !browsing() : p[k] !== false));
+    const sc = $('#libScroll');
+    const avail = (sc && sc.clientWidth ? sc.clientWidth : 900) - 36;
+    const need = () => cols.reduce((a, k) => a + (k === 'name' ? COLS.name.min : colWidth(k)) + 12, 0);
+    for (const k of DROP_ORDER) { if (need() <= avail) break; cols = cols.filter(c => c !== k); }
+    return cols;
+  }
+  const colTemplate = cols => cols.map(k => k === 'name' ? 'minmax(' + COLS.name.min + 'px, 1fr)' : colWidth(k) + 'px').join(' ');
   const plural = (n, w, p) => n + ' ' + (n === 1 ? w : (p || w + 's'));
   function splitName(name) { const { base, ext } = E.splitExt(name); return ext && base ? { base, ext } : { base: name, ext: '' }; }
   function dupSet() {
@@ -246,6 +312,7 @@
     if (pick && L.order && L.order.some(x => x.path === pick)) setSingle(pick);
     else if (pick && BR() && !isListed(path)) L.pendingSelect = pick;
     renderTagsPanel();
+    if (C.syncTree) C.syncTree(path);
   }
   function back() { if (!L.hist.length) return up(); const p = L.hist.pop(); L.fwd.push(L.cwd); go(p, { noHistory: true }); }
   function forward() { if (!L.fwd.length) return; const p = L.fwd.pop(); L.hist.push(L.cwd); go(p, { noHistory: true }); }
@@ -264,12 +331,11 @@
     const now = new Date();
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
     for (const f of L.files) {
-      if (g === 'folder') { const d = E.dirname(f.path); put('d:' + d.toLowerCase(), d || 'Top level', f, d ? 1 : 0); }
+      if (g === 'folder') { const d = E.dirname(f.path); put('d:' + d.toLowerCase(), d || V().vaultName, f, d ? 1 : 0); }
       else if (g === 'kind') { const k = E.typeGroup(f.extension); const i = KIND_ORDER.indexOf(k); put('k:' + k, k, f, i < 0 ? 99 : i); }
       else if (g === 'tag') {
-        const tags = tagsOf(f.path);
-        if (!tags.length) put('t:', 'No tags', f, 1);
-        for (const t of tags) put('t:' + t, '#' + t, f, 0);
+        const t = tagsOf(f.path)[0];           // each file once, under its main tag
+        if (!t) put('t:', 'No tags', f, 1); else put('t:' + t, '#' + t, f, 0);
       } else if (g === 'date') {
         const m = f.lastModified;
         let key, label, order;
@@ -289,10 +355,10 @@
     const grid = U().view === 'grid';
     const rows = [];
     const sc = $('#libScroll');
-    if (grid && sc) L.cols = Math.max(1, Math.floor((sc.clientWidth - 16) / TILE_W));
+    if (grid && sc) L.cols = Math.max(1, Math.floor((sc.clientWidth - 16) / tileW()));
     const pushFiles = files => {
       if (!grid) { for (const f of files) rows.push({ t: 'f', f, h: ROW }); return; }
-      for (let i = 0; i < files.length; i += L.cols) rows.push({ t: 'tiles', files: files.slice(i, i + L.cols), h: TILE_H });
+      for (let i = 0; i < files.length; i += L.cols) rows.push({ t: 'tiles', files: files.slice(i, i + L.cols), h: tileH() });
     };
     const groups = groupsOf();
     if (!groups) pushFiles(L.dirs.concat(L.files));
@@ -366,7 +432,25 @@
     sc.addEventListener('dragstart', onDragStart);
     if (window.ResizeObserver) {
       let lastW = 0;
-      new ResizeObserver(() => { const w = sc.clientWidth; if (Math.abs(w - lastW) < 4) return; lastW = w; if (U().view === 'grid') { buildRows(); paint(); } }).observe(sc);
+      new ResizeObserver(() => {
+        const w = sc.clientWidth; if (Math.abs(w - lastW) < 4) return; lastW = w;
+        if (U().view === 'grid') { buildRows(); paint(); return; }
+        // columns drop out (and come back) as the list gets narrower or wider
+        const next = visibleCols();
+        if (next.join() !== (L.vcols || []).join()) { L.vcols = next; const lib = el.querySelector('.lib'); lib.style.setProperty('--lib-cols', colTemplate(next)); renderHead(); paint(); }
+      }).observe(sc);
+      // drag a column's left edge to resize it; double-click to reset
+      el.addEventListener('mousedown', e => {
+        const h = e.target.closest('[data-colresize]'); if (!h) return;
+        e.preventDefault(); e.stopPropagation();
+        const k = h.dataset.colresize, x0 = e.clientX, w0 = colWidth(k), lib = el.querySelector('.lib');
+        L.colwLive = {}; L.resizing = true;
+        const mm = ev => { L.colwLive[k] = Math.max(COLS[k].min, Math.min(520, w0 + (x0 - ev.clientX))); lib.style.setProperty('--lib-cols', colTemplate(L.vcols)); };
+        const mu = () => { window.removeEventListener('mousemove', mm); window.removeEventListener('mouseup', mu); const w = L.colwLive[k]; L.colwLive = null; setTimeout(() => { L.resizing = false; }, 0); if (w) C.setUi('library', 'colw', Object.assign({}, U().colw || {}, { [k]: Math.round(w) })); refresh(); };
+        window.addEventListener('mousemove', mm); window.addEventListener('mouseup', mu);
+      }, true);
+      el.addEventListener('dblclick', e => { const h = e.target.closest('[data-colresize]'); if (!h) return; e.stopPropagation(); const cw = Object.assign({}, U().colw || {}); delete cw[h.dataset.colresize]; C.setUi('library', 'colw', cw); refresh(); }, true);
+      el.addEventListener('contextmenu', e => { if (!e.target.closest('#libHead')) return; e.preventDefault(); e.stopPropagation(); columnsMenu(e.clientX, e.clientY); }, true);
     }
     el.addEventListener('click', onClick);
     el.addEventListener('dblclick', onDblClick);
@@ -389,8 +473,12 @@
     const u = U();
     const lib = el.querySelector('.lib');
     lib.dataset.mode = u.view;
+    lib.dataset.tile = u.tile || 'm';
     lib.classList.toggle('no-details', !u.details);
     lib.classList.toggle('is-browsing', browsing());
+    L.vcols = visibleCols();
+    lib.style.setProperty('--lib-cols', colTemplate(L.vcols));
+    lib.style.setProperty('--tile-h', (tileH() - 8) + 'px');
     const input = el.querySelector('#libSearch');
     if (input.value !== L.query && document.activeElement !== input) input.value = L.query;
     input.placeholder = 'Search ' + (L.cwd ? E.basename(L.cwd) : V().vaultName);
@@ -432,7 +520,7 @@
       b('rename', 'pencil', '', 'Rename (F2)', demo || !n) +
       b('delete', 'trash', '', 'Delete (Del)', demo || !n) +
       '<span class="cmd-sep"></span>' +
-      '<button class="cmd-btn has-label" data-lib="sort-menu" aria-label="Sort" data-tip="Sort and group">' + icon('arrow-up-down') + '<span>' + esc(sortNames[u.sort] || 'Sort') + '</span>' + icon('chevron-down', 'xs') + '</button>' +
+      '<button class="cmd-btn has-label" data-lib="sort-menu" aria-label="Sort" data-tip="Sort and group">' + icon('arrow-up-down') + '<span>Sort: ' + esc(sortNames[u.sort] || 'Name') + '</span>' + icon('chevron-down', 'xs') + '</button>' +
       '<button class="cmd-btn has-label" data-lib="view-menu" aria-label="View" data-tip="Layout and panes">' + icon(u.view === 'grid' ? 'layout-grid' : 'list') + '<span>View</span>' + icon('chevron-down', 'xs') + '</button>' +
       '<button class="cmd-btn has-label" data-lib="tag-menu" aria-label="Tags" data-tip="Tag files">' + icon('tag') + '<span>Tags</span>' + icon('chevron-down', 'xs') + '</button>' +
       '<span class="spacer"></span>' +
@@ -440,30 +528,28 @@
       b('more', 'more-horizontal', '', 'More', false) +
       '<button class="cmd-btn' + (u.details ? ' is-active' : '') + '" data-lib="details" aria-label="Details pane" data-tip="Details pane">' + icon('panel-right') + '</button>';
   }
+  // a slim line under the address bar while searching: where it looks, and saving the search
   function renderChips() {
     const el = $('#libChips'); if (!el) return;
-    const toks = TG.tokenize(L.query);
-    if (!toks.length) { el.innerHTML = ''; el.classList.remove('show'); return; }
-    el.classList.add('show');
-    const scope = L.cwd ? '<span class="q-scope">in <b>' + esc(E.basename(L.cwd)) + '</b> <a class="mod-link" data-lib="search-everywhere" tabindex="0">search everywhere</a></span>' : '';
     const q = L.query.trim();
+    if (!q) { el.innerHTML = ''; el.classList.remove('show'); return; }
+    el.classList.add('show');
     const saved = (tagState().saved || []).some(s => s.query.trim() === q);
-    el.innerHTML = toks.map((t, i) => {
-      const isTag = /^-?(#|tags?:)/i.test(t);
-      const label = isTag ? t.replace(/^(-?)(tags?:)/i, '$1#') : t;
-      return '<span class="q-chip' + (isTag ? ' is-tag' : '') + (t.startsWith('-') ? ' is-not' : '') + '"' + (isTag ? ' style="--tc:' + tagColor(TG.normTag(label.replace(/^-/, ''))) + '"' : '') + '>' + esc(label) +
-        '<button data-lib="drop-token" data-i="' + i + '" aria-label="Remove ' + esc(label) + '">' + icon('x', 'xs') + '</button></span>';
-    }).join('') + scope +
-      '<span class="spacer"></span>' + (saved ? '<span class="muted small">' + icon('bookmark', 'xs') + 'Saved</span>' : '<a class="mod-link" data-lib="save-search" tabindex="0">' + icon('bookmark', 'xs') + 'Save search</a>') +
-      '<a class="mod-link" data-lib="clear" tabindex="0">Clear</a>';
+    el.innerHTML = '<span class="q-scope">' + icon('search', 'xs') + (L.cwd ? 'Searching <b>' + esc(E.basename(L.cwd)) + '</b> and its subfolders · <a class="mod-link" data-lib="search-everywhere" tabindex="0">Search everywhere</a>' : 'Searching all of <b>' + esc(V().vaultName) + '</b>') + '</span>' +
+      '<span class="spacer"></span>' + (saved ? '<span class="q-saved">' + icon('bookmark', 'xs') + 'Saved search</span>' : '<a class="mod-link" data-lib="save-search" tabindex="0">' + icon('bookmark', 'xs') + 'Save this search</a>');
   }
   function renderHead() {
     const el = $('#libHead'); if (!el) return;
     const u = U();
     if (u.view === 'grid') { el.innerHTML = ''; el.classList.remove('show'); return; }
     el.classList.add('show');
-    const col = (k, label, cls) => '<button class="lh-col ' + (cls || '') + (u.sort === k ? ' is-sorted' : '') + '" data-lib="sort" data-k="' + k + '">' + label + (u.sort === k ? icon(u.dir === 'desc' ? 'arrow-down' : 'arrow-up', 'xs') : '') + '</button>';
-    el.innerHTML = col('name', 'Name', 'lr-name') + '<div class="lh-col lr-tags">Tags</div>' + col('folder', 'Folder', 'lr-folder') + col('modified', 'Modified', 'lr-date') + col('size', 'Size', 'lr-size');
+    el.innerHTML = L.vcols.map((k, i) => {
+      const c = COLS[k], sorted = c.sort && u.sort === c.sort;
+      const handle = i > 0 ? '<span class="lh-resize" data-colresize="' + k + '" aria-hidden="true"></span>' : '';
+      const inner = '<span class="lh-label">' + c.label + '</span>' + (sorted ? icon(u.dir === 'desc' ? 'arrow-down' : 'arrow-up', 'xs') : '');
+      return c.sort ? '<button class="lh-col lc-' + k + (sorted ? ' is-sorted' : '') + '" data-lib="sort" data-k="' + c.sort + '">' + handle + inner + '</button>'
+        : '<div class="lh-col lc-' + k + '">' + handle + inner + '</div>';
+    }).join('');
   }
   function renderProgress() {
     const el = $('#libProgress'); if (!el) return;
@@ -548,24 +634,33 @@
     }
     const f = r.f;
     const sel = L.sel.has(f.path), foc = L.focus === f.path;
+    const cols = L.vcols || ['name', 'modified', 'size'];
+    const date = ts => '<div class="lr-date"' + (ts ? ' title="' + esc(ago(ts) + ' · ' + fullDate(ts)) + '"' : '') + '>' + esc(dateTime(ts)) + '</div>';
     if (f.isDir) {
       const pd = E.dirname(f.path);
-      return '<div class="lib-row is-dir' + (sel ? ' is-selected' : '') + (foc ? ' is-focus' : '') + '" style="top:' + y + 'px" data-path="' + esc(f.path) + '" data-dir="1" role="option" aria-selected="' + sel + '">' +
-        '<div class="lr-name">' + icon('folder') + '<span class="lr-base">' + esc(f.name) + '</span></div>' +
-        '<div class="lr-tags"><span class="lr-count">' + (BR() ? 'Folder' : f.opaque ? 'not scanned' : plural(f.count, 'file') + (f.sub ? ', ' + plural(f.sub, 'folder') : '')) + '</span></div>' +
-        '<div class="lr-folder" title="' + esc(pd || 'Top level') + '">' + (pd ? esc(pd) : '<span class="muted">—</span>') + '</div>' +
-        '<div class="lr-date"' + (f.lastModified ? ' title="' + esc(fullDate(f.lastModified)) + '"' : '') + '>' + (f.lastModified ? esc(ago(f.lastModified)) : '<span class="muted">—</span>') + '</div>' +
-        '<div class="lr-size">' + (f.count && !BR() ? C.fmt(f.size) : '') + '</div></div>';
+      const what = BR() ? '' : f.opaque ? 'not scanned' : plural(f.count, 'file') + (f.sub ? ', ' + plural(f.sub, 'folder') : '');
+      const cells = {
+        name: '<div class="lr-name">' + icon('folder') + '<span class="lr-base">' + esc(f.name) + '</span></div>',
+        tags: '<div class="lr-tags"></div>',
+        type: '<div class="lr-type" title="' + esc(what) + '">Folder' + (what ? '<span class="lr-sub"> · ' + esc(what) + '</span>' : '') + '</div>',
+        folder: '<div class="lr-folder">' + esc(pd || V().vaultName) + '</div>',
+        modified: date(f.lastModified),
+        size: '<div class="lr-size">' + (f.count && !BR() ? C.fmt(f.size) : '') + '</div>',
+      };
+      return '<div class="lib-row is-dir' + (sel ? ' is-selected' : '') + (foc ? ' is-focus' : '') + '" style="top:' + y + 'px" data-path="' + esc(f.path) + '" data-dir="1" draggable="true" role="option" aria-selected="' + sel + '">' + cols.map(k => cells[k]).join('') + '</div>';
     }
     const { base, ext } = splitName(f.name);
-    const tags = tagsOf(f.path), auto = new Set(autoOf(f.path));
+    const tags = tagsOf(f.path);
     const dir = E.dirname(f.path);
-    return '<div class="lib-row' + (sel ? ' is-selected' : '') + (foc ? ' is-focus' : '') + '" style="top:' + y + 'px" data-path="' + esc(f.path) + '" draggable="true" role="option" aria-selected="' + sel + '">' +
-      '<div class="lr-name">' + icon(window.fileIconName(f.extension)) + '<span class="lr-base">' + esc(base) + '</span>' + (ext ? '<span class="lr-ext">.' + esc(ext) + '</span>' : '') + '</div>' +
-      '<div class="lr-tags">' + tags.slice(0, 2).map(t => chip(t, { auto: auto.has(t) })).join('') + (tags.length > 2 ? '<span class="tc-more" title="' + esc(tags.slice(2).map(x => '#' + x).join('  ')) + '">+' + (tags.length - 2) + '</span>' : '') + '</div>' +
-      '<div class="lr-folder" title="' + esc(dir || 'Top level') + '">' + (dir ? esc(dir) : '<span class="muted">—</span>') + '</div>' +
-      '<div class="lr-date" title="' + esc(fullDate(f.lastModified)) + '">' + esc(ago(f.lastModified)) + '</div>' +
-      '<div class="lr-size">' + C.fmt(f.size) + '</div></div>';
+    const cells = {
+      name: '<div class="lr-name">' + icon(window.fileIconName(f.extension)) + '<span class="lr-base">' + esc(base) + '</span>' + (ext ? '<span class="lr-ext">.' + esc(ext) + '</span>' : '') + '</div>',
+      tags: '<div class="lr-tags"' + (tags.length ? ' title="' + esc(tags.map(x => '#' + x).join('  ')) + '"' : '') + '>' + tagCell(f) + '</div>',
+      type: '<div class="lr-type">' + esc(typeLabel(f)) + '</div>',
+      folder: '<div class="lr-folder" title="' + esc(dir || V().vaultName) + '">' + esc(dir || V().vaultName) + '</div>',
+      modified: date(f.lastModified),
+      size: '<div class="lr-size">' + C.fmt(f.size) + '</div>',
+    };
+    return '<div class="lib-row' + (sel ? ' is-selected' : '') + (foc ? ' is-focus' : '') + '" style="top:' + y + 'px" data-path="' + esc(f.path) + '" draggable="true" role="option" aria-selected="' + sel + '">' + cols.map(k => cells[k]).join('') + '</div>';
   }
   function firstVisible(top) {
     let lo = 0, hi = L.rows.length - 1;
@@ -608,82 +703,64 @@
     const prevInput = el.querySelector('#libTagInput');
     const keepFocus = prevInput && document.activeElement === prevInput;
     const files = selFiles();
+    const VW = window.OnyxViewer;
+    if (VW && VW.docked && files.length === 1 && files[0].path !== VW.path) VW.follow(files[0].path);
+    const more = '<button class="clickable-icon ld-more" data-lib="details-more" aria-label="More actions" data-tip="More actions">' + icon('more-horizontal') + '</button>';
     let h = '';
     const selDir = !files.length && L.sel.size === 1 ? dirBy([...L.sel][0]) : null;
-    if (selDir && BR()) {
-      h += '<div class="ld-preview ld-folder">' + icon('folder') + '</div><div class="ld-name">' + esc(selDir.name) + '</div>';
-      h += '<div class="ld-actions"><button class="btn small mod-cta" data-lib="enter">' + icon('folder-open') + 'Open</button><button class="btn small" data-lib="reveal-dir">' + icon('external-link') + 'In Explorer</button></div>';
-      h += '<div class="ld-section ld-props">' + prop('folder', 'Location', esc(absPath(selDir.path))) + (selDir.lastModified ? prop('clock', 'Changed', esc(ago(selDir.lastModified))) : '') + '</div>';
-      h += '<div class="ld-section"><button class="btn small block" data-lib="organize-dir">' + icon('sparkles') + 'Organize this folder</button><div class="ld-hint" style="margin-top:8px"><span>Opens it on its own so Onyx can plan a tidy structure. Drives and system folders stay browse-only.</span></div></div>';
-      el.innerHTML = h;
-      return;
-    }
     if (selDir) {
-      const inside = V().files.filter(f => f.path.toLowerCase().startsWith(selDir.path.toLowerCase() + '/'));
-      const counts = new Map();
-      for (const f of inside) for (const t of tagsOf(f.path)) counts.set(t, (counts.get(t) || 0) + 1);
-      const top = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12);
-      h += '<div class="ld-preview ld-folder">' + icon('folder') + '</div><div class="ld-name">' + esc(selDir.name) + '</div>';
-      h += '<div class="ld-actions"><button class="btn small mod-cta" data-lib="enter">' + icon('folder-open') + 'Open</button><button class="btn small" data-lib="reveal-dir">' + icon('external-link') + 'In Explorer</button></div>';
-      h += '<div class="ld-section ld-props">' + prop('files', 'Files', String(selDir.count)) + prop('folder', 'Folders', String(selDir.sub)) + prop('hard-drive', 'Size', C.fmt(selDir.size)) +
-        (selDir.lastModified ? prop('clock', 'Changed', esc(ago(selDir.lastModified))) : '') + '</div>';
-      if (top.length) h += '<div class="ld-section"><div class="ld-title">Tags inside</div><div class="ld-chips">' + top.map(([t, n]) => chip(t, { count: n, cls: 'is-link' })).join('') + '</div></div>';
-      if (inside.length) h += '<div class="ld-section"><button class="btn small block" data-lib="tag-dir">' + icon('tag') + 'Tag all ' + plural(inside.length, 'file') + ' inside…</button></div>';
+      h += '<div class="ld-preview ld-folder">' + icon('folder') + '</div><div class="ld-name">' + esc(selDir.name) + '</div><div class="ld-meta">Folder</div>';
+      h += '<div class="ld-actions"><button class="btn small mod-cta" data-lib="enter">' + icon('folder-open') + 'Open</button>' + more + '</div>';
+      h += '<div class="ld-section ld-props">' + (BR() ? prop('folder', 'Location', esc(absPath(selDir.path)))
+        : prop('files', 'Contains', esc(plural(selDir.count, 'file') + (selDir.sub ? ', ' + plural(selDir.sub, 'folder') : ''))) + prop('hard-drive', 'Size', C.fmt(selDir.size))) +
+        (selDir.lastModified ? prop('clock', 'Modified', esc(dateTime(selDir.lastModified))) : '') + '</div>';
+      if (BR()) h += '<div class="ld-section"><button class="btn small block" data-lib="organize-dir">' + icon('sparkles') + 'Organize this folder…</button><div class="ld-hint">Opens it on its own so Onyx can plan a tidy structure.</div></div>';
+      else { const n = filesInside(selDir.path).length; if (n) h += '<div class="ld-section"><button class="btn small block" data-lib="tag-dir">' + icon('tag') + 'Tag the ' + plural(n, 'file') + ' inside…</button></div>'; }
       el.innerHTML = h;
       return;
     }
     if (!files.length) {
-      const total = L.files.reduce((a, f) => a + f.size, 0);
-      const counts = new Map();
-      for (const f of L.files) for (const t of tagsOf(f.path)) counts.set(t, (counts.get(t) || 0) + 1);
-      const top = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 14);
-      const kinds = new Map();
-      for (const f of L.files) { const k = E.typeGroup(f.extension); kinds.set(k, (kinds.get(k) || 0) + f.size); }
-      const kl = [...kinds.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
       const dirsHere = browsing() ? L.dirs : [];
-      const allSize = total + dirsHere.reduce((a, d) => a + d.size, 0);
-      h += '<div class="ld-section"><div class="ld-title">' + (L.query.trim() ? 'Results' : L.cwd ? esc(E.basename(L.cwd)) : 'This folder') + '</div><div class="ld-big">' + (dirsHere.length ? plural(dirsHere.length, 'folder') + ', ' : '') + plural(L.files.length, 'file') + '</div><div class="muted">' + (BR() ? C.fmt(total) + (L.query.trim() ? '' : ' in files here') : C.fmt(allSize) + (dirsHere.length ? ' including subfolders' : '')) + '</div></div>';
-      if (kl.length && total) h += '<div class="ld-section"><div class="ld-title">Space by kind</div>' + kl.map(([k, s]) => '<button class="ld-bar" data-lib="query" data-q="kind:' + esc(k === '3D Models' ? '3d' : k.toLowerCase().replace(/s$/, '')) + '"><span class="lb-label">' + esc(k) + '</span><span class="lb-track"><span style="width:' + Math.max(2, Math.round(s / total * 100)) + '%"></span></span><span class="lb-val">' + C.fmt(s) + '</span></button>').join('') + '</div>';
-      if (top.length) h += '<div class="ld-section"><div class="ld-title">Tags here</div><div class="ld-chips">' + top.map(([t, n]) => chip(t, { count: n, cls: 'is-link' })).join('') + '</div></div>';
-      h += '<div class="ld-section ld-hint">' + icon('mouse-pointer', 'xs') + '<span>Select a file to see details and tag it. <b>Ctrl</b>-click or <b>Shift</b>-click to select several.</span></div>';
+      const total = L.files.reduce((a, f) => a + f.size, 0) + (BR() ? 0 : dirsHere.reduce((a, d) => a + d.size, 0));
+      const title = L.query.trim() ? 'Search results' : L.cwd ? E.basename(L.cwd) : V().vaultName;
+      h += '<div class="ld-empty"><div class="ld-empty-title">' + esc(title) + '</div><div class="ld-empty-sub">' + (dirsHere.length ? plural(dirsHere.length, 'folder') + ', ' : '') + plural(L.files.length, 'file') + (total ? ' · ' + C.fmt(total) : '') + '</div>' +
+        '<div class="ld-empty-hint">' + icon('mouse-pointer', 'xs') + '<span>Select a file to preview and tag it.</span></div></div>';
       el.innerHTML = h;
       return;
     }
-    const f = files[0];
     if (files.length === 1) {
+      const f = files[0];
       const tags = tagsOf(f.path), auto = new Set(autoOf(f.path));
       const it = C.S.plan ? C.S.plan.items.find(i => i.source === f.path) : null;
-      const VW = window.OnyxViewer, can = VW && VW.canPreview(f) && !V().demo;
+      const can = VW && VW.canPreview(f) && !V().demo;
       const extra = can ? VW.detailsPreview(f) : null;
       if (extra && extra.replace) h += '<div class="ld-ext">' + extra.html + '</div>';
       else h += thumbHTML(f, 320, 'ld-preview');
       if (extra && !extra.replace) h += '<div class="ld-ext">' + extra.html + '</div>';
-      h += '<div class="ld-name" title="' + esc(f.name) + '">' + esc(f.name) + '</div>';
-      h += '<div class="ld-actions">' + (can ? '<button class="btn small mod-cta" data-lib="preview" data-tip="Preview in Onyx (Space)">' + icon('eye' in window.ICONS ? 'eye' : 'search') + 'Preview</button><button class="btn small" data-lib="open" data-tip="Open in its own app">' + icon('external-link') + 'Open</button>'
-        : '<button class="btn small mod-cta" data-lib="open">' + icon('external-link') + 'Open</button>') +
-        '<button class="clickable-icon" data-lib="reveal" aria-label="Show in folder" data-tip="Show in folder">' + icon('folder-open') + '</button><button class="clickable-icon" data-lib="copy" aria-label="Copy path" data-tip="Copy path">' + icon('copy') + '</button></div>';
+      h += '<div class="ld-name" title="' + esc(f.name) + '">' + esc(f.name) + '</div><div class="ld-meta">' + esc(typeLabel(f)) + ' · ' + C.fmt(f.size) + '</div>';
+      h += '<div class="ld-actions">' + (can ? '<button class="btn small mod-cta" data-lib="preview" data-tip="Preview in Onyx (Space)">' + icon('eye') + 'Preview</button><button class="btn small" data-lib="open" data-tip="Open in its own app">' + icon('external-link') + 'Open</button>'
+        : '<button class="btn small mod-cta" data-lib="open">' + icon('external-link') + 'Open</button>') + more + '</div>';
       h += '<div class="ld-section"><div class="ld-title">Tags</div><div class="ld-chips">' + (tags.length ? tags.map(t => chip(t, { auto: auto.has(t), x: true, tip: true })).join('') : '<span class="muted small">No tags yet</span>') + '</div>' + tagInput() +
         '<div class="ld-tag-actions"><a class="mod-link" data-lib="tag-ai-sel" tabindex="0">' + icon('sparkles', 'xs') + 'Suggest with AI</a>' + (auto.size ? '<a class="mod-link" data-lib="retag-ai-sel" tabindex="0" data-tip="Replace the automatic tags with fresh ones">' + icon('refresh-cw', 'xs') + 'Re-tag</a>' : '') + '</div></div>';
       h += '<div class="ld-section ld-props">' +
         prop('folder', 'Folder', '<a class="mod-link" data-lib="go" data-p="' + esc(E.dirname(f.path)) + '" data-sel="' + esc(f.path) + '">' + esc(E.dirname(f.path) || V().vaultName) + '</a>') +
-        prop('file', 'Kind', esc(E.typeFolder(f.extension).replace('/', ' · ')) + (f.extension ? ' <span class="muted">.' + esc(f.extension) + '</span>' : '')) +
-        prop('hard-drive', 'Size', C.fmt(f.size)) +
-        prop('clock', 'Modified', '<span title="' + esc(fullDate(f.lastModified)) + '">' + esc(ago(f.lastModified)) + '</span>') +
+        prop('clock', 'Modified', '<span title="' + esc(ago(f.lastModified)) + '">' + esc(dateTime(f.lastModified)) + '</span>') +
         (dupSet().has(f.path) ? prop('copy', 'Duplicate', '<a class="mod-link" data-lib="query" data-q="&quot;' + esc(f.name) + '&quot;">Show copies</a>') : '') +
-        (it && it.kind === 'move' && !it.skip ? prop('folder-input', 'Plan', 'Moves to ' + esc(E.dirname(it.target) || 'top level')) : '') +
+        (it && it.kind === 'move' && !it.skip ? prop('folder-input', 'Plan', 'Moves to ' + esc(E.dirname(it.target) || V().vaultName)) : '') +
         '</div>';
     } else {
       const counts = new Map();
       for (const x of files) for (const t of tagsOf(x.path)) counts.set(t, (counts.get(t) || 0) + 1);
       const list = [...counts.entries()].sort((a, b) => b[1] - a[1]);
-      h += '<div class="ld-multi">' + files.slice(0, 5).map(x => '<span>' + icon(window.fileIconName(x.extension)) + '</span>').join('') + '</div>';
-      h += '<div class="ld-name">' + plural(files.length, 'file') + ' selected</div><div class="muted" style="text-align:center">' + C.fmt(files.reduce((a, x) => a + x.size, 0)) + '</div>';
-      h += '<div class="ld-section"><div class="ld-title">Tags</div><div class="ld-chips">' + (list.length ? list.map(([t, n]) => chip(t, { count: n === files.length ? '' : n + '/' + files.length, x: true, cls: n === files.length ? '' : 'is-partial' })).join('') : '<span class="muted small">None of these have tags</span>') + '</div>' + tagInput() + '</div>';
-      h += '<div class="ld-section"><button class="btn small block" data-lib="tag-ai-sel">' + icon('sparkles') + 'Suggest tags with AI</button><button class="btn small block" data-lib="retag-ai-sel">' + icon('refresh-cw') + 'Re-tag with AI</button><button class="btn small block" data-lib="tag-rules-sel">' + icon('zap') + 'Suggest tags from names</button><button class="btn small block" data-lib="copy">' + icon('copy') + 'Copy paths</button></div>';
+      h += '<div class="ld-stack">' + files.slice(0, 3).map((x, i) => thumbHTML(x, 160, 'ld-stack-card ld-stack-' + i)).join('') + '</div>';
+      h += '<div class="ld-name">' + plural(files.length, 'file') + ' selected</div><div class="ld-meta">' + C.fmt(files.reduce((a, x) => a + x.size, 0)) + '</div>';
+      h += '<div class="ld-actions"><button class="btn small mod-cta" data-lib="move-to">' + icon('folder-input') + 'Move to…</button><button class="btn small" data-lib="delete-sel">' + icon('trash') + 'Delete</button>' + more + '</div>';
+      h += '<div class="ld-section"><div class="ld-title">Tags</div><div class="ld-chips">' + (list.length ? list.map(([t, n]) => chip(t, { count: n === files.length ? '' : n + '/' + files.length, x: true, cls: n === files.length ? '' : 'is-partial' })).join('') : '<span class="muted small">None of these have tags</span>') + '</div>' + tagInput() +
+        '<div class="ld-tag-actions"><a class="mod-link" data-lib="tag-ai-sel" tabindex="0">' + icon('sparkles', 'xs') + 'Tag with AI</a><a class="mod-link" data-lib="retag-ai-sel" tabindex="0">' + icon('refresh-cw', 'xs') + 'Re-tag</a></div></div>';
     }
     el.innerHTML = h;
-    if (files.length === 1 && window.OnyxViewer && window.OnyxViewer.canPreview(files[0]) && !V().demo) { const pv = el.querySelector('.ld-preview'); if (pv) { pv.dataset.lib = 'preview'; pv.classList.add('is-previewable'); pv.dataset.tip = 'Preview (Space)'; } }
-    if (window.OnyxViewer) window.OnyxViewer.afterDetails(files.length === 1 ? files[0] : null);
+    if (files.length === 1 && VW && VW.canPreview(files[0]) && !V().demo) { const pv = el.querySelector('.ld-preview'); if (pv) { pv.dataset.lib = 'preview'; pv.classList.add('is-previewable'); pv.dataset.tip = 'Preview (Space)'; } }
+    if (VW) VW.afterDetails(files.length === 1 ? files[0] : null);
     if (keepFocus) { const n = el.querySelector('#libTagInput'); if (n) n.focus(); }
   }
   function prop(ic, k, v) { return '<div class="ld-prop"><span class="ld-k">' + icon(ic, 'xs') + esc(k) + '</span><span class="ld-v">' + v + '</span></div>'; }
@@ -834,8 +911,8 @@
     else if (k === 'ArrowLeft' && grid) next = Math.max(0, i - 1);
     else if (k === 'Home') next = 0;
     else if (k === 'End') next = list.length - 1;
-    else if (k === 'PageDown') next = Math.min(list.length - 1, Math.max(0, i) + Math.floor(($('#libScroll').clientHeight / (grid ? TILE_H : ROW))) * step);
-    else if (k === 'PageUp') next = Math.max(0, Math.max(0, i) - Math.floor(($('#libScroll').clientHeight / (grid ? TILE_H : ROW))) * step);
+    else if (k === 'PageDown') next = Math.min(list.length - 1, Math.max(0, i) + Math.floor(($('#libScroll').clientHeight / (grid ? tileH() : ROW))) * step);
+    else if (k === 'PageUp') next = Math.max(0, Math.max(0, i) - Math.floor(($('#libScroll').clientHeight / (grid ? tileH() : ROW))) * step);
     if (e.altKey) return;      // Alt+arrows are back / forward / up
     if (next != null) {
       e.preventDefault(); e.stopPropagation();
@@ -906,6 +983,7 @@
     else if (name === 'tag-dir') { const d = [...L.sel][0]; if (d) tagEditor(filesInside(d)); }
     else if (name === 'search-everywhere') { const q = L.query; L.hist.push(L.cwd); L.fwd = []; L.cwd = ''; L.query = q; refresh(); renderTagsPanel(); }
     else if (name === 'details') setPref('details', !u.details);
+    else if (name === 'sort' && L.resizing) { /* the end of a column resize */ }
     else if (name === 'sort') { if (u.sort === el.dataset.k) setPref('dir', u.dir === 'asc' ? 'desc' : 'asc'); else { C.setUi('library', 'dir', el.dataset.k === 'name' || el.dataset.k === 'folder' || el.dataset.k === 'type' ? 'asc' : 'desc'); setPref('sort', el.dataset.k); } }
     else if (name === 'sort-menu') sortMenu(el);
     else if (name === 'group-menu') {
@@ -927,6 +1005,9 @@
     else if (name === 'tag-rules-sel') autoTag('rules', { paths: [...L.sel] });
     else if (name === 'cancel-run') { C.api.tagsCancel(); C.notice('Stopping after the current batch…', '', 2500); }
     else if (name === 'cancel-op') { if (window.OnyxOps) window.OnyxOps.cancelOp(); }
+    else if (name === 'move-to') { if (window.OnyxOps) window.OnyxOps.moveTo(); }
+    else if (name === 'delete-sel') { if (window.OnyxOps) window.OnyxOps.del(false); }
+    else if (name === 'details-more') { const b = el.getBoundingClientRect(); menuAt = { x: b.left, y: b.bottom + 4 }; C.showMenu(window.OnyxOps ? window.OnyxOps.detailsMenu() : [], b.right - 230, b.bottom + 4); }
     else if (name === 'refresh') reloadNow();
     else if (name === 'view-menu') viewMenu(el);
     else if (name === 'tag-menu') autoTagMenu(el, true);
@@ -943,29 +1024,47 @@
       else if (op === 'more') O.moreMenu(el);
     }
   }
-  function sortMenu(el) {
+  function sortItems() {
     const u = U();
-    const b = el ? el.getBoundingClientRect() : { left: menuAt.x, bottom: menuAt.y - 4 };
     const items = [{ heading: 'Sort by' }];
-    for (const [k, l, d] of [['name', 'Name', 'asc'], ['modified', 'Date modified', 'desc'], ['size', 'Size', 'desc'], ['type', 'Type', 'asc'], ['folder', 'Folder', 'asc']]) items.push({ label: l, check: u.sort === k, action: () => { C.setUi('library', 'dir', d); setPref('sort', k); } });
-    items.push({ label: u.dir === 'asc' ? 'Ascending' : 'Descending', sub: 'flip', icon: u.dir === 'asc' ? 'arrow-up' : 'arrow-down', action: () => setPref('dir', u.dir === 'asc' ? 'desc' : 'asc') });
+    for (const [k, l, d, ic] of [['name', 'Name', 'asc', 'file'], ['modified', 'Date modified', 'desc', 'clock'], ['size', 'Size', 'desc', 'hard-drive'], ['type', 'Type', 'asc', 'layers'], ['folder', 'Folder', 'asc', 'folder']]) items.push({ label: l, icon: ic, check: u.sort === k, action: () => { C.setUi('library', 'dir', d); setPref('sort', k); } });
+    items.push({ label: u.dir === 'asc' ? 'Ascending' : 'Descending', icon: u.dir === 'asc' ? 'arrow-up' : 'arrow-down', sub: 'click to flip', action: () => setPref('dir', u.dir === 'asc' ? 'desc' : 'asc') });
     items.push({ heading: 'Group by' });
-    for (const [k, l, ic] of [['none', 'Nothing', 'list'], ['tag', 'Tag', 'tag'], ['folder', 'Folder', 'folder'], ['kind', 'Kind', 'layers'], ['date', 'Date modified', 'calendar']]) items.push({ label: l, icon: ic, check: u.group === k, action: () => { L.collapsed.clear(); setPref('group', k); } });
-    C.showMenu(items, b.left, b.bottom + 4);
+    for (const [k, l, ic] of [['none', 'Nothing', 'list'], ['tag', 'Main tag', 'tag'], ['folder', 'Folder', 'folder'], ['kind', 'Kind', 'layers'], ['date', 'Date modified', 'calendar']]) items.push({ label: l, icon: ic, check: u.group === k, action: () => { L.collapsed.clear(); setPref('group', k); } });
+    return items;
+  }
+  function sortMenu(el) {
+    const b = el ? el.getBoundingClientRect() : { left: menuAt.x, bottom: menuAt.y - 4 };
+    C.showMenu(sortItems(), b.left, b.bottom + 4);
   }
   function viewMenu(el) {
-    const u = U();
     const b = el ? el.getBoundingClientRect() : { left: menuAt.x, bottom: menuAt.y - 4 };
+    C.showMenu(viewItems(), b.left, b.bottom + 4);
+  }
+  function viewItems() {
+    const u = U();
     const items = [{ heading: 'Layout' },
       { label: 'List', icon: 'list', check: u.view !== 'grid', action: () => setPref('view', 'list') },
       { label: 'Grid with previews', icon: 'layout-grid', check: u.view === 'grid', action: () => setPref('view', 'grid') }];
     if (!BR()) items.push({ heading: 'Show' },
       { label: 'Folder by folder', icon: 'folder', check: u.browse !== 'flat', action: () => { cache = null; setPref('browse', 'folders'); } },
       { label: 'Every file inside, in one list', icon: 'files', check: u.browse === 'flat', action: () => { cache = null; setPref('browse', 'flat'); } });
+    if (u.view === 'grid') items.push({ heading: 'Size' }, ...[['s', 'Small'], ['m', 'Medium'], ['l', 'Large']].map(([k, l]) => ({ label: l, icon: 'layout-grid', check: (u.tile || 'm') === k, action: () => setPref('tile', k) })));
+    else items.push({ label: 'Columns', icon: 'list', submenu: () => columnItems() });
     items.push('sep',
+      { label: 'Tag names as chips', icon: 'tag', check: u.tagStyle === 'chips', action: () => setPref('tagStyle', u.tagStyle === 'chips' ? 'dots' : 'chips') },
       { label: 'Details pane', icon: 'panel-right', check: u.details, action: () => setPref('details', !u.details) },
       { label: 'Thumbnails', icon: 'image', check: u.thumbs, action: () => { L.thumbs.clear(); setPref('thumbs', !u.thumbs); } });
-    C.showMenu(items, b.left, b.bottom + 4);
+    return items;
+  }
+  function columnItems() {
+    const p = colPrefs();
+    const items = [{ heading: 'Columns' }];
+    for (const k of ['tags', 'type', 'modified', 'size']) items.push({ label: COLS[k].label, check: p[k] !== false, action: () => setPref('cols', Object.assign({}, p, { [k]: p[k] === false })) });
+    items.push('sep', { label: 'Reset column widths', icon: 'rotate-ccw', action: () => setPref('colw', {}) });
+    return items;
+  }
+  function columnsMenu(x, y) { C.showMenu(columnItems(), x, y);
   }
   function reloadNow() {
     const v = V(); if (!v) return;
@@ -976,12 +1075,12 @@
   // ------------------------------------------------------------------ actions on files
   async function openFile(path) {
     const v = V(); if (!v) return;
-    if (v.demo) { C.notice('The demo vault only exists in memory, so there’s nothing to open. Open a real folder to open files.', 'warn', 4500); return; }
+    if (v.demo) { C.notice('The demo folder only exists in memory, so there’s nothing to open. Open a real folder to open files.', 'warn', 4500); return; }
     const go = async () => { const r = await C.api.openFile(path); if (r && r.error) C.notice(esc(r.error), 'error'); else pushRecent(path); };
     if (EXEC.test(path)) C.confirmModal('Run this program?', '<p><b>' + esc(E.basename(path)) + '</b> is a program or script. Only run it if you trust where it came from.</p>', 'Run', go, true);
     else go();
   }
-  function reveal(path) { if (V().demo) { C.notice('The demo vault only exists in memory.', 'warn', 2500); return; } C.api.reveal(path); }
+  function reveal(path) { if (V().demo) { C.notice('The demo folder only exists in memory.', 'warn', 2500); return; } C.api.reveal(path); }
   async function addTags(paths, tags) {
     if (!paths.length || !tags.length) return;
     const view = await C.api.tagsEdit(paths, tags, []);
@@ -992,7 +1091,7 @@
     const view = await C.api.tagsEdit(paths, [], [tag]);
     V().tags = view; changed();
   }
-  function changed() { refresh(); renderTagsPanel(); if (C.renderExplorer) C.renderExplorer(); }
+  function changed() { rankCols = null; refresh(); renderTagsPanel(); if (C.renderExplorer) C.renderExplorer(); }
   function toggleTagQuery(tag, additive) {
     const toks = TG.tokenize(L.query);
     const isTag = t => /^#|^tags?:/i.test(t) && TG.normTag(t.replace(/^tags?:/i, '')) === tag;
@@ -1039,7 +1138,8 @@
   }
   function hk(k) { return k; }
   // "Tags ›" in the right-click menu
-  function tagMenu(p, dir) {
+  function tagMenu(p, dir) { C.showMenu(tagItems(p, dir), menuAt.x, menuAt.y); }
+  function tagItems(p, dir) {
     let items;
     if (dir) {
       const n = filesInside(p).length;
@@ -1065,10 +1165,10 @@
       if (present.size) items.push({ label: 'Remove automatic tags', icon: 'rotate-ccw', action: () => clearAuto(files.map(f => f.path)) });
       if (one) items.push('sep', { label: 'More like this', icon: 'search', sub: '.' + (one.extension || '?'), action: () => setQuery(one.extension ? 'type:' + one.extension : 'kind:other') });
     }
-    C.showMenu(items, menuAt.x, menuAt.y);
+    return items;
   }
   function filesInside(d) { const low = d.toLowerCase() + '/'; return V().files.filter(f => f.path.toLowerCase().startsWith(low)).map(f => f.path); }
-  function revealDir(d) { if (V().demo) { C.notice('The demo vault only exists in memory.', 'warn', 2500); return; } C.api.reveal(d); }
+  function revealDir(d) { if (V().demo) { C.notice('The demo folder only exists in memory.', 'warn', 2500); return; } C.api.reveal(d); }
   function organizeDir(d) { if (C.openFolderPath) C.openFolderPath(absPath(d)); }
   function dirMenuItems(d) {
     if (BR()) return [
@@ -1103,7 +1203,7 @@
     paths = paths || [...L.sel];
     if (!paths.length) { C.notice('Select files in the Library first', 'warn', 2500); return; }
     const m = C.modal({ cls: 'mod-prompt mod-tags', noClose: true, html: null });
-    m.box.innerHTML = '<div class="prompt-input-container"><div class="prompt-title">Tags for <b>' + (paths.length === 1 ? esc(E.basename(paths[0])) : plural(paths.length, 'file')) + '</b></div><div class="te-chips"></div>' +
+    m.box.innerHTML = '<div class="prompt-input-container"><div class="prompt-title te-title">Tags for <b>' + (paths.length === 1 ? esc(E.basename(paths[0])) : plural(paths.length, 'file')) + '</b></div><div class="te-chips"></div>' +
       '<input class="prompt-input" placeholder="Type a tag, like invoice or iceland-trip" spellcheck="false" aria-label="Tag"></div><div class="prompt-results" role="listbox"></div>' +
       '<div class="prompt-instructions"><span><b>↵</b>add tag</span><span><b>⌫</b>remove last</span><span><b>esc</b>done</span></div>';
     const input = m.box.querySelector('input'), list = m.box.querySelector('.prompt-results'), chipsEl = m.box.querySelector('.te-chips');
@@ -1172,7 +1272,7 @@
     const prov = C.S.settings && C.S.settings.providers ? (C.S.settings.providers[C.S.settings.ai.provider] || {}).label : '';
     const items = [];
     const sf = selFiles();
-    if (fromBar) items.push({ label: sf.length ? 'Add tags to ' + plural(sf.length, 'selected file') + '…' : 'Add tags… (select files first)', icon: 'tag', sub: '#', action: () => tagEditor() }, 'sep');
+    if (fromBar) items.push(sf.length ? { label: 'Add tags to ' + plural(sf.length, 'selected file') + '…', icon: 'tag', sub: '#', action: () => tagEditor() } : { label: 'Add tags…', icon: 'tag', sub: 'select files first', disabled: true }, 'sep');
     if (v && v.browse) {
       items.push({ heading: 'Tag automatically' });
       if (sf.length) items.push({ label: 'Tag the ' + plural(sf.length, 'selected file') + ' with AI', icon: 'sparkles', action: () => autoTag('ai', { paths: sf.map(f => f.path) }) }, { label: 'Re-tag them with AI', icon: 'refresh-cw', action: () => autoTag('ai', { paths: sf.map(f => f.path), retag: true }) });
@@ -1269,9 +1369,7 @@
     if (!el || !C.WS.isVisible('tags')) return;
     const v = V();
     const head = $('#tagsHeader');
-    if (head) head.innerHTML =
-      '<button class="clickable-icon" data-tp="auto" data-tip="Tag automatically" aria-label="Tag automatically">' + icon('sparkles') + '</button>' +
-      '<button class="clickable-icon" data-tp="sort" data-tip="' + (U().tagSort === 'name' ? 'Tags sorted by name' : 'Tags sorted by count') + '" aria-label="Sort tags">' + icon('arrow-up-down') + '</button>';
+    if (head) { head.innerHTML = ''; head.hidden = true; }
     if (!v) { el.innerHTML = '<div class="nav-empty">No folder open.<br><a class="mod-link" data-action="open-folder">Open a folder</a></div>'; return; }
     const prevFilter = el.querySelector('#tagFilter');
     const hadFocus = prevFilter && document.activeElement === prevFilter;
@@ -1281,20 +1379,20 @@
     const br = !!v.browse;
     const untagged = br ? 0 : v.files.filter(f => !tagsOf(f.path).length).length;
     const tagged = v.files.length - untagged;
-    const item = (ic, label, query, count, extra) => '<div class="tp-item' + (q === query ? ' is-active' : '') + '" data-q="' + esc(query) + '" tabindex="0" role="button">' + icon(ic) + '<span class="tp-label">' + esc(label) + '</span>' + (extra || '') + '<span class="tp-count">' + (br ? '' : count) + '</span></div>';
+    const item = (ic, label, query, count, extra) => (!br && !count && q !== query) ? '' : '<div class="tp-item' + (q === query ? ' is-active' : '') + '" data-q="' + esc(query) + '" tabindex="0" role="button">' + icon(ic) + '<span class="tp-label">' + esc(label) + '</span>' + (extra || '') + '<span class="tp-count">' + (br ? '' : count) + '</span></div>';
     let h = '';
     if (L.run) h += '<div class="tp-run"><span class="spinner"></span><span>' + (L.run.mode === 'ai' ? 'Tagging with AI' : 'Tagging') + (L.run.of > 1 ? ' · ' + L.run.batch + '/' + L.run.of : '') + '…</span>' + (L.run.mode === 'ai' ? '<a class="mod-link" data-tp="cancel">Stop</a>' : '') + '</div>';
     else if (!br && (untagged && (!tagged || untagged / v.files.length > 0.5) && !v.demo || untagged && !tagged)) {
       h += '<div class="tp-cta"><div class="tp-cta-title">' + icon('sparkles') + plural(untagged, 'file') + ' without tags</div><div class="tp-cta-sub">Let AI read the names and tag them, so you can find anything by topic, project or purpose.</div>' +
         '<div class="tp-cta-row"><button class="btn small mod-cta" data-tp="ai">Tag with AI</button><button class="btn small" data-tp="rules">Offline</button></div></div>';
     }
-    h += '<div class="tp-section"><div class="tp-title">Browse</div>' +
-      (!v.demo && C.openPlaces ? '<div class="tp-item" data-tp="places" tabindex="0" role="button">' + icon('monitor') + '<span class="tp-label">This PC</span><span class="tp-count"></span></div>' : '') +
-      '<div class="tp-item' + (!q && !L.cwd ? ' is-active' : '') + '" data-tp="home" tabindex="0" role="button">' + icon(br ? 'hard-drive' : 'folder-open') + '<span class="tp-label">' + esc(v.vaultName) + '</span><span class="tp-count">' + (br ? '' : v.files.length) + '</span></div>' +
-      item('clock', 'Changed this week', 'modified:<7d', br ? 0 : v.files.filter(f => now - f.lastModified <= 7 * DAY).length) +
+    h += '<div class="tp-section"><div class="tp-title">Places</div>' +
+      (!v.demo && C.openPlaces ? '<div class="tp-item' + (C.S.pcOpen ? ' is-active' : '') + '" data-tp="places" tabindex="0" role="button">' + icon('monitor') + '<span class="tp-label">This PC</span><span class="tp-count"></span></div>' : '') +
+      '<div class="tp-item' + (!q && !L.cwd && !C.S.pcOpen ? ' is-active' : '') + '" data-tp="home" tabindex="0" role="button">' + icon(br ? 'hard-drive' : 'folder-open') + '<span class="tp-label">' + esc(v.vaultName) + '</span><span class="tp-count">' + (br ? '' : v.files.length) + '</span></div></div>';
+    const filters = item('clock', 'Changed this week', 'modified:<7d', br ? 0 : v.files.filter(f => now - f.lastModified <= 7 * DAY).length) +
       (br ? '' : item('inbox', 'Untagged', 'is:untagged', untagged) + item('copy', 'Duplicates', 'is:duplicate', dupSet().size)) +
-      item('hard-drive', 'Large files', 'size:>100mb', br ? 0 : v.files.filter(f => f.size >= 100 * 1048576).length) + '</div>' +
-      '';
+      item('hard-drive', 'Large files', 'size:>100mb', br ? 0 : v.files.filter(f => f.size >= 100 * 1048576).length);
+    if (filters) h += '<div class="tp-section"><div class="tp-title">Filters</div>' + filters + '</div>';
     const saved = tagState().saved || [];
     if (saved.length) h += '<div class="tp-section"><div class="tp-title">Saved searches<span class="spacer"></span>' + (q && !saved.some(s => s.query.trim() === q) ? '<button class="clickable-icon" data-tp="save" data-tip="Save current search" aria-label="Save current search">' + icon('plus') + '</button>' : '') + '</div>' +
       (saved.length ? saved.map((s, i) => {
@@ -1314,10 +1412,26 @@
     const f = L.tagFilter.trim().toLowerCase();
     const shownTags = f ? tags.filter(([t]) => t.includes(f)) : tags;
     const activeTags = new Set(TG.tokenize(L.query).filter(x => /^#|^tags?:/i.test(x)).map(x => TG.normTag(x.replace(/^tags?:/i, ''))));
-    h += '<div class="tp-section"><div class="tp-title">Tags<span class="tp-count">' + tags.length + '</span></div>';
-    if (tags.length > 10 || f) h += '<div class="search-wrap tp-filter">' + icon('search', 'xs') + '<input id="tagFilter" class="search-input" placeholder="Filter tags…" spellcheck="false" aria-label="Filter tags" value="' + esc(L.tagFilter) + '"></div>';
-    h += shownTags.length ? shownTags.map(([t, n]) => '<div class="tp-item tp-tag' + (activeTags.has(t) ? ' is-active' : '') + '" data-tag="' + esc(t) + '" tabindex="0" role="button" style="--tc:' + tagColor(t) + '"><span class="tc-dot"></span><span class="tp-label">' + esc(t) + '</span><span class="tp-count">' + n + '</span></div>').join('')
-      : '<div class="tp-empty">' + (f ? 'No tags match.' : 'No tags yet. Select files in the Library and press <kbd>#</kbd>, or drag files onto a tag.') + '</div>';
+    const sortTip = U().tagSort === 'name' ? 'Sorted A–Z (click for most used)' : 'Sorted by most used (click for A–Z)';
+    h += '<div class="tp-section tp-tags"><div class="tp-title">Tags<span class="tp-count">' + tags.length + '</span><span class="spacer"></span>' +
+      '<button class="clickable-icon tp-mini" data-tp="auto" data-tip="Tag automatically" aria-label="Tag automatically">' + icon('sparkles', 'xs') + '</button>' +
+      '<button class="clickable-icon tp-mini" data-tp="sort" data-tip="' + sortTip + '" aria-label="' + sortTip + '">' + icon(U().tagSort === 'name' ? 'arrow-down-a-z' : 'arrow-down-wide-narrow', 'xs') + '</button></div>';
+    if (tags.length > 12 || f) h += '<div class="search-wrap tp-filter">' + icon('search', 'xs') + '<input id="tagFilter" class="search-input" placeholder="Filter tags…" spellcheck="false" aria-label="Filter tags" value="' + esc(L.tagFilter) + '"></div>';
+    const tagRow = ([t, n]) => '<div class="tp-item tp-tag' + (activeTags.has(t) ? ' is-active' : '') + '" data-tag="' + esc(t) + '" tabindex="0" role="button" style="--tc:' + tagColor(t) + '"><span class="tc-dot"></span><span class="tp-label">' + esc(t) + '</span><span class="tp-count">' + n + '</span></div>';
+    // years (2019, 2020…) are grouped into one row so they don't push real topics down the list
+    const isYear = t => /^(19|20)\d\d$/.test(t);
+    const years = f ? [] : shownTags.filter(([t]) => isYear(t)).sort((a, b) => b[0].localeCompare(a[0]));
+    const topics = f ? shownTags : shownTags.filter(([t]) => !isYear(t));
+    const showAll = f || L.allTags;
+    const LIMIT = 12;
+    h += topics.length || years.length ? (showAll ? topics : topics.slice(0, LIMIT)).map(tagRow).join('') : '<div class="tp-empty">' + (f ? 'No tags match.' : 'No tags yet. Select files in the Library and press <kbd>#</kbd>, or drag files onto a tag.') + '</div>';
+    if (!showAll && topics.length > LIMIT) h += '<button class="tp-more" data-tp="all-tags">Show all ' + topics.length + '</button>';
+    else if (!f && L.allTags && topics.length > LIMIT) h += '<button class="tp-more" data-tp="all-tags">Show fewer</button>';
+    if (years.length) {
+      const open = store.get('tp.years', false) || years.some(([t]) => activeTags.has(t));
+      h += '<div class="tp-group' + (open ? '' : ' is-collapsed') + '"><div class="tp-item tp-toggle" data-tp="toggle-years" tabindex="0" role="button">' + icon('calendar') + '<span class="tp-label">Years</span><span class="tp-count">' + years.length + '</span>' + icon('chevron-down', 'xs') + '</div>' +
+        '<div class="tp-years">' + years.map(([t, n]) => '<button class="tp-year' + (activeTags.has(t) ? ' is-active' : '') + '" data-tag="' + esc(t) + '" title="' + plural(n, 'file') + '">' + esc(t) + '</button>').join('') + '</div></div>';
+    }
     h += '</div>';
     el.innerHTML = h;
     el.scrollTop = y;
@@ -1331,6 +1445,7 @@
   function tagsPanelClick(e) {
     const panel = e.target.closest('.view-root[data-view="tags"]');
     if (!panel) return false;
+    if (C.closePlaces && e.target.closest('[data-tp="home"], [data-q], .tp-tag, .tp-year')) C.closePlaces();
     const b = e.target.closest('[data-tp]');
     if (b) {
       const k = b.dataset.tp;
@@ -1343,11 +1458,13 @@
       else if (k === 'rules') autoTag('rules', { scope: 'all' });
       else if (k === 'cancel') C.api.tagsCancel();
       else if (k === 'save') { showLibrary(); saveSearch(); }
+      else if (k === 'all-tags') { L.allTags = !L.allTags; renderTagsPanel(); }
+      else if (k === 'toggle-years') { store.set('tp.years', !store.get('tp.years', false)); renderTagsPanel(); }
       else if (k === 'toggle-kinds') { store.set('tp.kinds2', !store.get('tp.kinds2', false)); renderTagsPanel(); }
       else if (k === 'places') { if (C.openPlaces) C.openPlaces(); }
       return true;
     }
-    const t = e.target.closest('.tp-tag');
+    const t = e.target.closest('.tp-tag, .tp-year');
     if (t) { toggleTagQuery(t.dataset.tag, e.ctrlKey || e.metaKey || e.shiftKey); return true; }
     const it = e.target.closest('[data-q]');
     if (it) { setQuery(it.dataset.q); return true; }
@@ -1503,14 +1620,15 @@
   }
   function reveal(path) { L.focus = path; ensureVisible(path); paint(); }
   function focusList() { const sc = $('#libScroll'); if (sc) sc.focus({ preventScroll: true }); }
-  function revealPath(p) { if (V().demo) { C.notice('The demo vault only exists in memory.', 'warn', 2500); return; } C.api.reveal(p || ''); }
+  function revealPath(p) { if (V().demo) { C.notice('The demo folder only exists in memory.', 'warn', 2500); return; } C.api.reveal(p || ''); }
   function init(ctx) {
     C = ctx;
     C.api.onTagProgress(p => { if (L.run) { L.run.batch = p.batch; L.run.of = p.of; renderProgress(); renderTagsPanel(); } });
     if (window.OnyxOps) window.OnyxOps.init(ctx, {
       selection, selectPaths, selectAll, invertSelection, neighbourAfter, dropDirs, relist, reveal, focusList, revealPath,
       mergeListing: r => { mergeListing(r); cache = null; }, changed: () => { cache = null; L.statsFor = null; changed(); },
-      renderCmd, renderProgress, rowEl, dirBy, fileBy, absPath, go, openFile, organizeDir, addTags, tagMenu, viewMenu, sortMenu, reloadNow,
+      renderCmd, renderProgress, rowEl, dirBy, fileBy, absPath, go, openFile, organizeDir, addTags, tagMenu, tagItems, viewMenu, viewItems, sortMenu, sortItems, reloadNow, selFiles,
+      allDirs: () => { const v = V(); return v ? v.dirs.map(d => d.path) : []; },
       cwd: () => L.cwd, query: () => L.query.trim(), focus: () => L.focus,
       showDetails: () => { if (!U().details) setPref('details', true); },
     });

@@ -155,16 +155,28 @@
         const fs = 12 / t.k;
         c.font = '500 ' + fs + 'px ' + this._col.font;
         c.textAlign = 'center'; c.textBaseline = 'top';
-        for (const n of this.nodes) {
+        // labels never overlap: bigger and focused nodes claim their space first, the rest skip
+        const avoid = this.nodes.length < 1500;
+        const order = avoid ? this.nodes.slice().sort((a, b) => (b === focus) - (a === focus) || (a.kind === 'file') - (b.kind === 'file') || b.r - a.r) : this.nodes;
+        const taken = [];
+        const pad = 3 / t.k;
+        for (const n of order) {
           let o;
           if (focus) o = isNear(n) ? 1 : 0;
           else if (!this.opts.labels) o = 0;
           else if (n.kind === 'file') o = Math.min(1, Math.max(0, (t.k - 1.3 * this.forces.textFade) / 0.5));
           else o = Math.min(1, Math.max(0, (t.k - 0.3 * this.forces.textFade) / 0.3));
           if (o <= 0.02) continue;
+          const ly = n.y + n.r * this.forces.nodeSize + 4 / t.k;
+          if (avoid) {
+            const w = c.measureText(n.label).width / 2 + pad;
+            const box = [n.x - w, ly - pad, n.x + w, ly + fs + pad];
+            if (n !== focus && taken.some(b => box[0] < b[2] && box[2] > b[0] && box[1] < b[3] && box[3] > b[1])) continue;
+            taken.push(box);
+          }
           c.globalAlpha = o * (n.kind === 'file' ? .8 : 1);
           c.fillStyle = n === focus ? this._col.text : n.kind === 'file' ? this._col.muted : this._col.text;
-          c.fillText(n.label, n.x, n.y + n.r * this.forces.nodeSize + 4 / t.k);
+          c.fillText(n.label, n.x, ly);
         }
         c.globalAlpha = 1;
       }

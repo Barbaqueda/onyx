@@ -16,20 +16,23 @@
       if (!z) return 1;
       const b = box(), side = z.r % 180 !== 0;
       const w = side ? z.nh : z.nw, h = side ? z.nw : z.nh;
-      return Math.max(0.01, Math.min(1, (b.width - 40) / w, (b.height - 40) / h));
+      // small pictures (icons, thumbnails) are enlarged up to 2× so they aren't a speck in the middle
+      const up = Math.max(z.nw, z.nh) < 600 ? 2 : 1;
+      return Math.max(0.01, Math.min(up, (b.width - 40) / w, (b.height - 40) / h));
     };
     const tools = () => z ? [
       { icon: 'minus', tip: 'Zoom out (−)', run: () => zoomTo(z.s / 1.25) },
       { text: Math.round(z.s * 100) + '%', tip: 'Actual size (1)', run: () => zoomTo(1) },
       { icon: 'plus', tip: 'Zoom in (+)', run: () => zoomTo(z.s * 1.25) },
       { icon: 'maximize', tip: 'Fit to window (0)', run: fit, active: z.fit },
-      { icon: 'rotate-cw', tip: 'Rotate (R)', run: rotate },
+      { icon: 'rotate-cw-square', tip: 'Rotate (R)', run: rotate },
     ] : [];
     function apply() {
       if (!z || gone) return;
       img.style.width = z.nw + 'px'; img.style.height = z.nh + 'px';
       img.style.transform = 'translate(-50%, -50%) translate(' + z.x + 'px, ' + z.y + 'px) rotate(' + z.r + 'deg) scale(' + z.s + ')';
       img.classList.toggle('is-pannable', z.s > fitScale() + 0.001);
+      img.classList.toggle('is-pixelated', z.s > 1.01 && Math.max(z.nw, z.nh) <= 128);
       api.setToolbar(tools());
     }
     function fit() { if (!z) return; z.s = fitScale(); z.x = 0; z.y = 0; z.fit = true; apply(); }

@@ -3,18 +3,18 @@
   'use strict';
 
   const VIEWS = {
-    files: { icon: 'files', name: 'Files', home: 'left' },
+    files: { icon: 'folder', name: 'Folders', home: 'left' },
     tags: { icon: 'tag', name: 'Tags', home: 'left' },
     library: { icon: 'library', name: 'Library', home: 'main' },
-    organize: { icon: 'sparkles', name: 'Organize', home: 'right' },
-    structure: { icon: 'list-tree', name: 'Structure', home: 'main' },
+    organize: { icon: 'sliders-horizontal', name: 'Organize panel', home: 'right' },
+    structure: { icon: 'sparkles', name: 'Organize', home: 'main' },
     changes: { icon: 'arrow-left-right', name: 'Changes', home: 'main' },
     graph: { icon: 'git-fork', name: 'Graph view', home: 'main' },
   };
   const ALL = Object.keys(VIEWS);
   const R = (tabs, active) => ({ tabs, active: active || tabs[0] || null, collapsed: false });
   const PRESETS = {
-    explorer: { name: 'Explorer', desc: 'The Library in the middle, folders and tags on the left, Organize tucked away until you need it', ws: () => ({ left: R(['tags', 'files']), right: Object.assign(R(['organize']), { collapsed: true }), main: [R(['library'])], split: 'row', ratio: 0.5, hidden: ['structure', 'changes', 'graph'] }) },
+    explorer: { name: 'Explorer', desc: 'The Library in the middle, places, folders and tags on the left', ws: () => ({ left: R(['tags', 'files']), right: Object.assign(R([]), { collapsed: true }), main: [R(['library'])], split: 'row', ratio: 0.5, hidden: ['structure', 'changes', 'graph', 'organize'] }) },
     classic: { name: 'Classic', desc: 'Tags and files left, Organize right, views in the middle', ws: () => ({ left: R(['tags', 'files']), right: R(['organize']), main: [R(['library', 'structure', 'changes', 'graph'])], split: 'row', ratio: 0.5, hidden: [] }) },
     explore: { name: 'Explore', desc: 'Library front and center, organizing tucked away', ws: () => ({ left: R(['tags', 'files']), right: Object.assign(R(['organize']), { collapsed: true }), main: [R(['library', 'graph', 'structure', 'changes'])], split: 'row', ratio: 0.5, hidden: [] }) },
     swapped: { name: 'Swapped', desc: 'Organize on the left, files and tags on the right', ws: () => ({ left: R(['organize']), right: R(['tags', 'files']), main: [R(['library', 'structure', 'changes', 'graph'])], split: 'row', ratio: 0.5, hidden: [] }) },
@@ -120,9 +120,9 @@
   // fewer things on screen: Organize's panel folds away, the plan views only appear when there's a plan
   function declutter() {
     for (const side of ['left', 'right']) if (ws[side].tabs.length === 1 && ws[side].tabs[0] === 'organize') ws[side].collapsed = true;
-    for (const v of ['structure', 'changes', 'graph']) {
+    for (const v of ['structure', 'changes', 'graph', 'organize']) {
       const k = keyOf(v);
-      if (k && k.startsWith('main')) { removeFrom(v); if (!ws.hidden.includes(v)) ws.hidden.push(v); }
+      if (k && (k.startsWith('main') || v === 'organize')) { removeFrom(v); if (!ws.hidden.includes(v)) ws.hidden.push(v); }
     }
     tidyPanes();
     if (!keyOf('library')) { ws.hidden = ws.hidden.filter(x => x !== 'library'); ws.main[0].tabs.unshift('library'); }
@@ -160,10 +160,10 @@
     panes.classList.toggle('split-column', ws.split === 'column');
     panes.innerHTML = ws.main.map((p, i) => (i ? '<div class="pane-split" data-split role="separator" aria-orientation="' + (ws.split === 'row' ? 'vertical' : 'horizontal') + '"></div>' : '') +
       '<div class="pane" data-pane="' + i + '" style="flex:' + (ws.main.length > 1 ? (i ? 1 - ws.ratio : ws.ratio) : 1) + ' 1 0">' +
-      '<div class="tab-header drag" data-strip="main:' + i + '"><div class="tabs" role="tablist">' +
+      '<div class="tab-header drag' + (p.tabs.length <= 1 ? ' is-single' : '') + '" data-strip="main:' + i + '"><div class="tabs" role="tablist">' +
       p.tabs.map(v => { const m = tabMeta(v); return '<div class="tab' + (v === p.active ? ' is-active' : '') + '" draggable="true" role="tab" tabindex="0" aria-selected="' + (v === p.active) + '" data-view="' + v + '" data-action="activate-view">' +
         icon(m.icon) + '<span>' + esc(m.title || m.name) + '</span>' + (m.count != null ? '<span class="count">' + m.count + '</span>' : '') +
-        '<button class="tab-close" data-action="close-view" data-view="' + v + '" aria-label="Close ' + esc(m.name) + '" data-tip="Close">' + icon('x') + '</button></div>'; }).join('') +
+        (v === 'library' ? '' : '<button class="tab-close" data-action="close-view" data-view="' + v + '" aria-label="Close ' + esc(m.name) + '" data-tip="Close">' + icon('x') + '</button>') + '</div>'; }).join('') +
       '</div><div class="spacer"></div>' +
       (i === ws.main.length - 1 ? '<button class="clickable-icon pane-btn" data-action="toggle-right" data-tip="Toggle right sidebar" data-cmd="toggle-right" aria-label="Toggle right sidebar">' + icon('panel-right') + '</button>' : '') +
       '</div><div class="pane-body" data-body="main:' + i + '">' + (p.active ? '' : emptyPane()) + '</div></div>').join('');
