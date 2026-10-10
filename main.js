@@ -122,22 +122,38 @@ function dangerousRoot(p) {
   return null;
 }
 
-function loadFolder(folder) {
-  const danger = dangerousRoot(folder);
-  if (danger) return { error: danger + ' Onyx won\'t reorganize it, to keep your system safe.' };
-  const r = scanDirectory(folder);
-  scan = { root: folder, files: r.files, dirs: r.dirs, skipped: r.skipped, demo: false };
-  loadTagDb(); syncTags();
+function rememberRecent(folder) {
   const s = loadSettings();
   s.ui.recent = [folder].concat((s.ui.recent || []).filter(x => x !== folder)).slice(0, 6);
   writeJson(SETTINGS_FILE(), s);
+}
+function loadFolder(folder) {
+  const danger = dangerousRoot(folder);
+  // drives, system folders and the whole user folder: explore, search and tag, but never reorganize
+  if (danger) return openBrowse(folder, danger);
+  const r = scanDirectory(folder);
+  scan = { root: folder, files: r.files, dirs: r.dirs, skipped: r.skipped, demo: false };
+  loadTagDb(); syncTags();
+  rememberRecent(folder);
   return vaultPayload();
+}
+function openBrowse(folder, reason) {
+  scan = { root: path.resolve(folder), files: [], dirs: [], skipped: [], demo: false, browse: true, reason: reason || '', autoTagged: 0 };
+  loadTagDb();
+  rememberRecent(folder);
+  return vaultPayload();
+}
+function locationName(p) {
+  const r = path.resolve(p);
+  const parsed = path.parse(r);
+  if (parsed.root.toLowerCase() === r.toLowerCase()) return process.platform === 'win32' ? r.replace(/[\\/]+$/, '') + ' drive' : 'Computer';
+  return path.basename(r) || r;
 }
 
 function vaultPayload() {
   return {
-    vaultName: scan.demo ? 'Demo vault' : path.basename(scan.root) || scan.root,
-    rootPath: scan.root, demo: scan.demo,
+    vaultName: scan.demo ? 'Demo vault' : locationName(scan.root),
+    rootPath: scan.root, demo: scan.demo, browse: !!scan.browse, browseReason: scan.reason || '',
     files: scan.files, dirs: scan.dirs, skipped: scan.skipped,
     undo: (() => { const h = scan.demo ? null : lastHistory(scan.root); return h ? { at: h.at, count: h.moves.length } : null; })(),
     tags: tagView(), autoTagged: scan.autoTagged || 0,
@@ -165,7 +181,7 @@ function saveTagDb(db, root) {
   db = db || tagDb; root = root || scan.root;
   if (db && !(scan.demo && db === tagDb) && root) writeJson(tagFile(root), db);
 }
-function tagView() { return tagDb ? TG.view(tagDb, scan.files) : { files: {}, colors: {}, saved: [] }; }
+function tagView() { return !tagDb ? { files: {}, colors: {}, saved: [] } : scan.browse ? TG.viewAll(tagDb) : TG.view(tagDb, scan.files); }
 function autoTagMode() { const l = (loadSettings().ui || {}).library || {}; return l.autoTag || 'rules'; }
 // After every scan: follow moved files, then tag new files from their names (offline, instant)
 function syncTags() {
@@ -184,7 +200,8 @@ function insideRoot(rel) {
   if (!scan.root) return null;
   const full = path.resolve(scan.root, String(rel || ''));
   const root = path.resolve(scan.root);
-  const inside = (p, r) => p.toLowerCase() === r.toLowerCase() || p.toLowerCase().startsWith(r.toLowerCase() + path.sep);
+  // a drive root already ends with a separator ("C:\\")
+  const inside = (p, r) => { const pl = p.toLowerCase(), rl = r.toLowerCase(); return pl === rl || pl.startsWith(rl.endsWith(path.sep) ? rl : rl + path.sep); };
   if (!inside(full, root)) return null;
   // follow junctions and links: the real file must be inside the real folder too
   try { if (!inside(fs.realpathSync(full), fs.realpathSync(root))) return null; } catch { /* missing file: callers report it */ }
@@ -445,14 +462,16 @@ ipcMain.handle('load-demo', async () => {
   return vaultPayload();
 });
 ipcMain.handle('rescan', async () => {
-  if (scan.demo || !scan.root) return vaultPayload();
+  if (scan.demo || !scan.root || scan.browse) return vaultPayload();
   const r = scanDirectory(scan.root);
   Object.assign(scan, r);
   syncTags();
   return vaultPayload();
 });
 
+const BROWSE_ONLY = 'This is a drive or system folder, so Onyx only browses it and never reorganizes it. Right-click a folder inside it and choose “Organize this folder”.';
 ipcMain.handle('organize', async (event, strategy) => {
+  if (scan.browse) return { error: BROWSE_ONLY };
   if (!scan.files.length) return { error: 'Open a folder first' };
   const settings = loadSettings();
   const ai = { used: false, provider: settings.ai.provider, providerLabel: PROVIDERS[settings.ai.provider]?.label || '', error: '', summary: '', model: '' };
@@ -479,6 +498,7 @@ ipcMain.handle('organize', async (event, strategy) => {
 });
 
 ipcMain.handle('apply-plan', async (event, items) => {
+  if (scan.browse) return { error: BROWSE_ONLY };
   if (scan.demo) return { error: 'This is the demo vault — nothing to move. Open a real folder to apply changes.' };
   if (!scan.root) return { error: 'No folder open' };
   const r = applyPlan(scan.root, items);
@@ -490,6 +510,7 @@ ipcMain.handle('apply-plan', async (event, items) => {
 });
 
 ipcMain.handle('undo', async () => {
+  if (scan.browse) return { error: 'Nothing to undo here.' };
   if (!scan.root) return { error: 'No folder open' };
   const r = undoLast(scan.root);
   if (tagDb && r.restoredMoves) TG.applyMoves(tagDb, r.restoredMoves);
@@ -605,12 +626,21 @@ ipcMain.handle('tags-cancel', async () => { if (tagRun) tagRun.cancelled = true;
 ipcMain.handle('tags-auto', async (event, { mode, paths, scope }) => {
   if (!tagDb) return { error: 'Open a folder first' };
   let files = scan.files.filter(f => !E.untouchableReason(f) || /\.(crdownload|part|partial|download)$/i.test(f.name));
+  if (scan.browse) {
+    if (!paths || !paths.length) return { error: 'This location is too big to tag all at once. Select files, or tag a folder from its right-click menu.' };
+    files = [];
+    for (const p of cleanPaths(paths).slice(0, 3000)) {
+      const full = insideRoot(p);
+      try { const st = fs.statSync(full); if (st.isFile()) files.push({ name: path.basename(p), path: p, extension: path.extname(p).toLowerCase().slice(1), size: st.size, lastModified: st.mtimeMs }); } catch { /* gone */ }
+    }
+    paths = files.map(f => f.path);
+  }
   const view = tagView();
   if (paths && paths.length) { const set = new Set(cleanPaths(paths).map(p => p.toLowerCase())); files = files.filter(f => set.has(f.path.toLowerCase())); }
   else if (scope === 'untagged') files = files.filter(f => !view.files[f.path]);
   if (mode === 'rules') {
-    const m = TG.autoTags(scan.files, scan.dirs, { only: new Set(files.map(f => f.path)) });
-    const r = TG.applyAuto(tagDb, Object.fromEntries(m), 'rules', scan.files);
+    const m = scan.browse ? TG.autoTags(files, []) : TG.autoTags(scan.files, scan.dirs, { only: new Set(files.map(f => f.path)) });
+    const r = TG.applyAuto(tagDb, Object.fromEntries(m), 'rules', scan.browse ? files : scan.files);
     saveTagDb();
     return { view: tagView(), added: r.added, files: r.files, checked: files.length };
   }
@@ -644,7 +674,7 @@ ipcMain.handle('tags-auto', async (event, { mode, paths, scope }) => {
     if (!parsed) { if (i === 0) { tagRun = null; return { error: (lastErr && lastErr.message) || 'AI tagging failed' }; } failed++; continue; }
     if (tagDb !== db || scan.root !== root) { switched = true; break; }
     for (const id of b.ids) if (!Object.prototype.hasOwnProperty.call(parsed, id)) parsed[id] = [];
-    const r = TG.applyAuto(db, parsed, 'ai', scan.files);
+    const r = TG.applyAuto(db, parsed, 'ai', scan.browse ? files : scan.files);
     added += r.added; touched += r.files;
     for (const list of Object.values(parsed)) for (const t of list) used.add(t);
     saveTagDb(db, root);
@@ -652,6 +682,128 @@ ipcMain.handle('tags-auto', async (event, { mode, paths, scope }) => {
   tagRun = null;
   if (switched) return { error: 'Stopped AI tagging because another folder was opened. Tags added so far were kept.' };
   return { view: tagView(), added, files: touched, checked: files.length, model, failedBatches: failed, cancelled: run.cancelled, capped };
+});
+
+// ============================================================================
+// Browsing big locations: list one folder at a time, search on demand
+// ============================================================================
+const hiddenName = lower => lower.startsWith('$') || SYSTEM_DIRS.has(lower) || SYSTEM_FILES.has(lower);
+const fileInfo = (name, rel, st) => ({ name, path: rel, extension: path.extname(name).toLowerCase().replace(/^\./, ''), size: st.size, lastModified: st.mtimeMs });
+async function listDirectory(rel) {
+  rel = String(rel || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+  const full = insideRoot(rel);
+  if (!full) return { path: rel, dirs: [], files: [], error: 'That folder isn’t inside this location.' };
+  let entries;
+  try { entries = await fs.promises.readdir(full, { withFileTypes: true }); }
+  catch (e) {
+    const msg = e.code === 'EPERM' || e.code === 'EACCES' ? 'Windows doesn’t let apps look inside this folder.' : e.code === 'ENOENT' ? 'This folder no longer exists.' : 'Couldn’t read this folder (' + e.code + ').';
+    return { path: rel, dirs: [], files: [], error: msg };
+  }
+  const dirs = [], files = [];
+  let capped = false;
+  const relOf = n => rel ? rel + '/' + n : n;
+  const jobs = [];
+  for (const ent of entries) {
+    if (jobs.length >= 20000) { capped = true; break; }
+    const lower = ent.name.toLowerCase();
+    if (ent.isSymbolicLink() || hiddenName(lower)) continue;
+    const p = path.join(full, ent.name);
+    if (ent.isDirectory()) jobs.push(fs.promises.stat(p).then(st => { dirs.push({ path: relOf(ent.name), lastModified: st.mtimeMs }); }, () => { dirs.push({ path: relOf(ent.name) }); }));
+    else if (ent.isFile()) jobs.push(fs.promises.stat(p).then(st => { files.push(fileInfo(ent.name, relOf(ent.name), st)); }, () => {}));
+  }
+  for (let i = 0; i < jobs.length; i += 500) await Promise.all(jobs.slice(i, i + 500));
+  return { path: rel, dirs, files, capped };
+}
+ipcMain.handle('list-dir', async (e, rel) => {
+  if (!scan.root || scan.demo) return { error: 'Nothing to list' };
+  const r = await listDirectory(rel);
+  // tag new files from their names as you browse (offline, instant)
+  if (!r.error && tagDb && autoTagMode() === 'rules' && r.files.length) {
+    const map = Object.fromEntries(TG.autoTags(r.files, r.path ? [{ path: r.path }] : []));
+    if (TG.applyAuto(tagDb, map, 'rules', r.files).added) saveTagDb();
+  }
+  r.tags = tagView();
+  return r;
+});
+
+let searchToken = 0;
+ipcMain.handle('search-dir', async (e, { rel, query, limit }) => {
+  if (!scan.root || scan.demo || !tagDb) return { files: [] };
+  const token = ++searchToken;
+  rel = String(rel || '').replace(/^\/+|\/+$/g, '');
+  if (!insideRoot(rel)) return { files: [], error: 'Not in this location' };
+  const q = TG.parseQuery(query);
+  const max = Math.min(5000, limit || 2000), deadline = Date.now() + 15000, ctx = { now: Date.now() };
+  const low = new Map(Object.entries(tagDb.files).map(([k, v]) => [k.toLowerCase(), v]));
+  const tagsFor = p => { const x = low.get(p.toLowerCase()); return x && x.t ? x.t : []; };
+  const relLow = rel.toLowerCase();
+  const results = [];
+  let visited = 0, truncated = false;
+  const consider = async (cands) => {
+    const stats = await Promise.all(cands.map(c => fs.promises.stat(path.join(scan.root, c.rel)).then(st => st, () => null)));
+    for (let i = 0; i < cands.length; i++) {
+      const st = stats[i]; if (!st || !st.isFile()) continue;
+      const f = fileInfo(cands[i].name, cands[i].rel, st);
+      if (TG.matchFile(f, tagsFor(f.path), q, ctx)) { results.push(f); if (results.length >= max) { truncated = true; return true; } }
+    }
+    return false;
+  };
+  // tags are indexed: no need to walk the drive
+  if (q.tags.length) {
+    const cands = [];
+    for (const [k, v] of Object.entries(tagDb.files)) {
+      if (relLow && !k.toLowerCase().startsWith(relLow + '/')) continue;
+      if (!q.tags.every(w => (v.t || []).some(t => t === w || t.startsWith(w + '/')))) continue;
+      cands.push({ rel: k, name: path.posix.basename(k) });
+    }
+    for (let i = 0; i < cands.length; i += 200) if (await consider(cands.slice(i, i + 200))) break;
+    return { files: results, truncated, visited: cands.length };
+  }
+  const queue = [rel];
+  outer:
+  while (queue.length) {
+    if (token !== searchToken) return { cancelled: true };
+    if (Date.now() > deadline || visited > 500000) { truncated = true; break; }
+    const d = queue.shift();
+    let ents;
+    try { ents = await fs.promises.readdir(path.join(scan.root, d), { withFileTypes: true }); } catch { continue; }
+    const cands = [];
+    for (const ent of ents) {
+      visited++;
+      const lower = ent.name.toLowerCase();
+      if (ent.isSymbolicLink() || hiddenName(lower)) continue;
+      const r = d ? d + '/' + ent.name : ent.name;
+      if (ent.isDirectory()) { if (!OPAQUE_DIRS.has(lower)) queue.push(r); continue; }
+      if (!ent.isFile()) continue;
+      // cheap checks before touching the disk again
+      const ext = path.extname(lower).slice(1);
+      if (q.exts.length && !q.exts.includes(ext)) continue;
+      if (q.kinds.length) { const tf = E.typeFolder(ext); if (!q.kinds.some(k => tf === k || tf.startsWith(k + '/'))) continue; }
+      if (q.text.length) { const hay = (r + ' ' + tagsFor(r).map(t => '#' + t).join(' ')).toLowerCase(); if (!q.text.every(w => hay.includes(w))) continue; }
+      cands.push({ rel: r, name: ent.name });
+    }
+    for (let i = 0; i < cands.length; i += 300) if (await consider(cands.slice(i, i + 300))) break outer;
+  }
+  return { files: results, truncated, visited };
+});
+
+ipcMain.handle('list-places', async () => {
+  const drives = [];
+  if (process.platform === 'win32') {
+    for (const L of 'CDEFGHIJKLMNOPQRSTUVWXYZ') {
+      const root = L + ':\\';
+      try { fs.accessSync(root); } catch { continue; }
+      let total = 0, free = 0;
+      try { const s = fs.statfsSync(root); total = s.blocks * s.bsize; free = s.bavail * s.bsize; } catch { /* unknown */ }
+      drives.push({ path: root, name: L + ':', total, free });
+    }
+  } else drives.push({ path: '/', name: 'Computer', total: 0, free: 0 });
+  const places = [];
+  for (const [name, key] of [['Home', 'home'], ['Desktop', 'desktop'], ['Documents', 'documents'], ['Downloads', 'downloads'], ['Pictures', 'pictures'], ['Music', 'music'], ['Videos', 'videos']]) {
+    let p; try { p = app.getPath(key); } catch { continue; }
+    if (p && fs.existsSync(p)) places.push({ name, path: p, browseOnly: !!dangerousRoot(p) });
+  }
+  return { drives, places };
 });
 
 const EXEC_EXT = /\.(exe|msi|bat|cmd|com|ps1|vbs|vbe|js|jse|wsf|wsh|scr|pif|lnk|reg|hta|cpl|jar|msix|appx)$/i;

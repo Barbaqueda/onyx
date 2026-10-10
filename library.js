@@ -14,7 +14,10 @@
     thumbs: new Map(), queue: [], busy: 0,
     run: null, dupsFor: null, dups: new Set(), tagFilter: '', vaultKey: '',
     cwd: '', hist: [], fwd: [], dirs: [], statsFor: null, stats: null,
+    loaded: new Set(), loading: new Map(), listErr: new Map(), search: null, searchTimer: null, pendingSelect: null,
   };
+  // browse-only locations (drives, system folders): folders load one at a time, search runs in the background
+  const BR = () => !!(V() && V().browse);
 
   // ------------------------------------------------------------------ helpers
   const esc = s => C.esc(s);
@@ -95,12 +98,13 @@
       if (!st.has(k)) st.set(k, { isDir: true, path: p, name: E.basename(p), extension: '', size: 0, lastModified: 0, count: 0, sub: 0 });
       return st.get(k);
     };
-    for (const d of v.dirs) { const x = ensure(d.path); if (d.opaque) x.opaque = true; let p = E.dirname(d.path); while (p) { ensure(p); p = E.dirname(p); } }
+    for (const d of v.dirs) { const x = ensure(d.path); if (d.opaque) x.opaque = true; if (d.lastModified > x.dirTime || !x.dirTime) x.dirTime = d.lastModified || 0; let p = E.dirname(d.path); while (p) { ensure(p); p = E.dirname(p); } }
     for (const f of v.files) {
       let d = E.dirname(f.path);
       while (d) { const x = ensure(d); x.count++; x.size += f.size; if (f.lastModified > x.lastModified) x.lastModified = f.lastModified; d = E.dirname(d); }
     }
     for (const x of st.values()) {
+      if (v.browse) x.lastModified = x.dirTime || x.lastModified;
       const parent = E.dirname(x.path).toLowerCase();
       if (!children.has(parent)) children.set(parent, []);
       children.get(parent).push(x);
@@ -109,13 +113,14 @@
     L.stats = { st, children }; L.statsFor = v.files;
     return L.stats;
   }
-  const browsing = () => U().browse !== 'flat' && !L.query.trim();
+  const browsing = () => (BR() || U().browse !== 'flat') && !L.query.trim();
   let cache = null;
   function compute() {
     const v = V();
     if (!v) { L.files = []; L.dirs = []; return; }
     const u = U();
     const stats = dirStats();
+    if (v.browse) { computeBrowse(v, u, stats); return; }
     // the folder we were in may have been moved or emptied away
     while (L.cwd && !stats.st.has(L.cwd.toLowerCase())) L.cwd = E.dirname(L.cwd);
     const key = [L.query, u.sort, u.dir, u.browse, L.cwd];
@@ -142,7 +147,87 @@
     for (const p of [...L.sel]) if (!keep.has(p)) L.sel.delete(p);
     if (L.focus && !keep.has(L.focus)) L.focus = null;
   }
+  function computeBrowse(v, u, stats) {
+    cache = null;
+    const cwdLow = L.cwd.toLowerCase();
+    const cmp = comparator();
+    const q = L.query.trim();
+    if (!q) {
+      L.search = null;
+      if (!L.loaded.has(cwdLow)) { L.files = []; L.dirs = []; ensureListed(L.cwd); return; }
+      L.files = v.files.filter(f => E.dirname(f.path).toLowerCase() === cwdLow).sort(cmp);
+      const dcmp = u.sort === 'modified' ? cmp : (a, b) => (u.dir === 'desc' ? -1 : 1) * C.collator.compare(a.name, b.name);
+      L.dirs = (stats.children.get(cwdLow) || []).slice().sort(dcmp);
+    } else {
+      const key = cwdLow + '\u0000' + q;
+      if (!L.search || L.search.key !== key) runSearch(key, L.cwd, q);
+      L.files = (L.search.files || []).slice().sort(cmp);
+      L.dirs = [];
+    }
+    const keep = new Set(L.files.map(f => f.path).concat(L.dirs.map(d => d.path)));
+    for (const p of [...L.sel]) if (!keep.has(p)) L.sel.delete(p);
+    if (L.focus && !keep.has(L.focus)) L.focus = null;
+  }
   function dirBy(p) { return dirStats().st.get(String(p).toLowerCase()) || null; }
+  function absPath(rel) {
+    const root = (V() && V().rootPath) || '';
+    const sep = root.includes('\\') ? '\\' : '/';
+    return rel ? root.replace(/[\\/]+$/, '') + sep + rel.split('/').join(sep) : root;
+  }
+  function isListed(rel) { return !BR() || L.loaded.has(String(rel || '').toLowerCase()); }
+  function ensureListed(rel) {
+    rel = rel || '';
+    const k = rel.toLowerCase();
+    if (!BR() || L.loaded.has(k)) return Promise.resolve();
+    if (L.loading.has(k)) return L.loading.get(k);
+    const vault = V();
+    const pr = C.api.listDir(rel).then(r => {
+      L.loading.delete(k);
+      if (V() !== vault || !r) return;
+      if (r.error && !r.files) { L.listErr.set(k, r.error); L.loaded.add(k); }
+      else mergeListing(r);
+      afterListing(k);
+    }, () => { L.loading.delete(k); L.listErr.set(k, 'Couldn’t read this folder.'); L.loaded.add(k); afterListing(k); });
+    L.loading.set(k, pr);
+    return pr;
+  }
+  function mergeListing(r) {
+    const v = V();
+    const k = (r.path || '').toLowerCase();
+    v.files = v.files.filter(f => E.dirname(f.path).toLowerCase() !== k).concat(r.files || []);
+    v.dirs = v.dirs.filter(d => E.dirname(d.path).toLowerCase() !== k).concat(r.dirs || []);
+    if (r.tags) v.tags = r.tags;
+    L.loaded.add(k);
+    if (r.error) L.listErr.set(k, r.error); else L.listErr.delete(k);
+    if (r.capped) L.listErr.set(k + '#capped', 'This folder has more than 20,000 items; showing the first 20,000.');
+  }
+  function mergeFound(files) {
+    const v = V();
+    const have = new Set(v.files.map(f => f.path.toLowerCase()));
+    const add = files.filter(f => !have.has(f.path.toLowerCase()));
+    if (add.length) v.files = v.files.concat(add);
+  }
+  function afterListing(k) {
+    if (L.cwd.toLowerCase() === k) {
+      refresh();
+      if (L.pendingSelect && fileBy(L.pendingSelect)) { const p = L.pendingSelect; L.pendingSelect = null; setSingle(p); }
+    }
+    renderTagsPanel();
+    if (C.renderExplorer) C.renderExplorer();
+  }
+  function runSearch(key, rel, query) {
+    clearTimeout(L.searchTimer);
+    L.search = { key, busy: true, files: [], truncated: false };
+    const vault = V();
+    L.searchTimer = setTimeout(async () => {
+      let r;
+      try { r = await C.api.searchDir(rel, query, 2000); } catch (e) { r = { files: [], error: e.message }; }
+      if (V() !== vault || !L.search || L.search.key !== key || (r && r.cancelled)) return;
+      mergeFound(r.files || []);
+      L.search = { key, busy: false, files: r.files || [], truncated: !!r.truncated, error: r.error || '' };
+      refresh();
+    }, 250);
+  }
 
   // ------------------------------------------------------------------ navigation (like File Explorer)
   function go(path, opts) {
@@ -158,6 +243,7 @@
     refresh();
     const pick = opts.select || (from && E.dirname(from).toLowerCase() === path.toLowerCase() ? from : null);
     if (pick && L.order && L.order.some(x => x.path === pick)) setSingle(pick);
+    else if (pick && BR() && !isListed(path)) L.pendingSelect = pick;
     renderTagsPanel();
   }
   function back() { if (!L.hist.length) return up(); const p = L.hist.pop(); L.fwd.push(L.cwd); go(p, { noHistory: true }); }
@@ -239,8 +325,11 @@
       el.innerHTML = '<div class="empty-state"><div class="empty-inner"><img class="logo small" src="icon.png" alt=""><h1 style="font-size:20px">Your library</h1><div class="sub">Open a folder to browse it here: search everything, tag files, and find them again in a second.</div><button class="btn mod-cta" data-action="open-folder">' + icon('folder-open') + 'Open folder</button></div></div>';
       return;
     }
-    const key = (v.rootPath || 'demo') + '|' + v.vaultName;
-    if (L.vaultKey !== key) { L.vaultKey = key; L.sel.clear(); L.focus = null; L.anchor = null; L.query = ''; L.collapsed.clear(); L.thumbs.clear(); }
+    const key = (v.rootPath || 'demo') + '|' + v.vaultName + '|' + (v.browse ? 'b' : 'f');
+    if (L.vaultKey !== key) {
+      L.vaultKey = key; L.sel.clear(); L.focus = null; L.anchor = null; L.query = ''; L.collapsed.clear(); L.thumbs.clear();
+      L.cwd = ''; L.hist = []; L.fwd = []; L.loaded = new Set(); L.loading = new Map(); L.listErr = new Map(); L.search = null; L.pendingSelect = null;
+    }
     if (!el.querySelector('.lib')) build(el);
     refresh();
   }
@@ -321,15 +410,17 @@
     const v = V(), u = U();
     const segs = L.cwd ? L.cwd.split('/') : [];
     let acc = '';
-    const crumbs = ['<button class="crumb" data-lib="go" data-p="" title="' + esc(v.rootPath || v.vaultName) + '">' + icon('folder-open', 'xs') + '<span>' + esc(v.vaultName) + '</span></button>']
+    const crumbs = (C.openPlaces && !v.demo ? ['<button class="crumb crumb-pc" data-lib="places" title="This PC: drives and folders">' + icon('monitor', 'xs') + '<span>This PC</span></button><span class="crumb-sep">' + icon('chevron-right', 'xs') + '</span>'] : [])
+      .concat(['<button class="crumb" data-lib="go" data-p="" title="' + esc(v.rootPath || v.vaultName) + '">' + icon(v.browse ? 'hard-drive' : 'folder-open', 'xs') + '<span>' + esc(v.vaultName) + '</span></button>'])
       .concat(segs.map((sname, i) => { acc = acc ? acc + '/' + sname : sname; return '<span class="crumb-sep">' + icon('chevron-right', 'xs') + '</span><button class="crumb' + (i === segs.length - 1 ? ' is-current' : '') + '" data-lib="go" data-p="' + esc(acc) + '">' + esc(sname) + '</button>'; }));
     el.innerHTML =
       '<button class="clickable-icon" data-lib="back" aria-label="Back" data-tip="Back (Alt+←)"' + (L.hist.length || L.cwd ? '' : ' disabled') + '>' + icon('arrow-left') + '</button>' +
       '<button class="clickable-icon" data-lib="forward" aria-label="Forward" data-tip="Forward (Alt+→)"' + (L.fwd.length ? '' : ' disabled') + '>' + icon('arrow-right') + '</button>' +
       '<button class="clickable-icon" data-lib="up" aria-label="Up one folder" data-tip="Up one folder (Alt+↑)"' + (L.cwd ? '' : ' disabled') + '>' + icon('arrow-up') + '</button>' +
       '<div class="lib-crumbs" role="navigation" aria-label="Folder">' + crumbs.join('') + (L.query.trim() ? '<span class="crumb-search">' + icon('search', 'xs') + 'Search results</span>' : '') + '</div>' +
-      '<div class="segmented lib-browse" role="group" aria-label="Show"><button data-lib="browse" data-v="folders" class="' + (u.browse !== 'flat' ? 'is-active' : '') + '" data-tip="Browse folder by folder">' + icon('folder') + '<span>Folders</span></button>' +
-      '<button data-lib="browse" data-v="flat" class="' + (u.browse === 'flat' ? 'is-active' : '') + '" data-tip="Every file inside this folder in one list">' + icon('files') + '<span>All files</span></button></div>';
+      (v.browse ? '<span class="lib-browseonly" data-tip="' + esc('Browse only: Onyx won’t reorganize this location. Right-click a folder and choose “Organize this folder” to sort it.') + '">' + icon('shield-check', 'xs') + 'Browse only</span>' : '') +
+      (v.browse ? '' : '<div class="segmented lib-browse" role="group" aria-label="Show"><button data-lib="browse" data-v="folders" class="' + (u.browse !== 'flat' ? 'is-active' : '') + '" data-tip="Browse folder by folder">' + icon('folder') + '<span>Folders</span></button>' +
+      '<button data-lib="browse" data-v="flat" class="' + (u.browse === 'flat' ? 'is-active' : '') + '" data-tip="Every file inside this folder in one list">' + icon('files') + '<span>All files</span></button></div>');
   }
   function renderChips() {
     const el = $('#libChips'); if (!el) return;
@@ -370,11 +461,12 @@
     const all = V().files.length;
     let h;
     if (browsing()) h = '<span>' + (L.dirs.length ? plural(L.dirs.length, 'folder') + ' · ' : '') + plural(L.files.length, 'file') + ' · ' + C.fmt(total) + '</span>';
+    else if (BR()) h = '<span>' + (L.search && L.search.busy ? 'Searching…' : plural(L.files.length, 'result') + (L.search && L.search.truncated ? ' (stopped early: narrow your search to see more)' : '') + ' · ' + C.fmt(total)) + '</span>';
     else h = '<span>' + (L.files.length === all ? plural(all, 'file') : L.files.length + ' of ' + plural(all, 'file')) + ' · ' + C.fmt(total) + '</span>';
     const sf = selFiles();
     if (sf.length) h += '<span class="lf-sel">' + plural(sf.length, 'file') + ' selected · ' + C.fmt(sf.reduce((a, f) => a + f.size, 0)) + '</span>';
-    const tagged = V().files.filter(f => tagsOf(f.path).length).length;
-    h += '<span class="spacer"></span><span class="muted">' + tagged + ' tagged</span>';
+    const tagged = BR() ? Object.keys(tagState().files).length : V().files.filter(f => tagsOf(f.path).length).length;
+    h += '<span class="spacer"></span><span class="muted">' + tagged + ' tagged' + (BR() ? ' here and below' : '') + '</span>';
     el.innerHTML = h;
   }
 
@@ -421,7 +513,7 @@
       return '<div class="lib-tiles" style="top:' + y + 'px;grid-template-columns:repeat(' + L.cols + ',minmax(0,1fr))">' + r.files.map(f => {
         const sel = L.sel.has(f.path), foc = L.focus === f.path;
         if (f.isDir) return '<div class="lib-tile is-dir' + (sel ? ' is-selected' : '') + (foc ? ' is-focus' : '') + '" data-path="' + esc(f.path) + '" data-dir="1" role="option" aria-selected="' + sel + '" title="' + esc(f.path) + '">' +
-          '<div class="lt-thumb lt-folder">' + icon('folder') + '</div><div class="lt-name">' + esc(f.name) + '</div><div class="lt-meta"><span>' + (f.opaque ? 'not scanned' : plural(f.count, 'file')) + '</span></div></div>';
+          '<div class="lt-thumb lt-folder">' + icon('folder') + '</div><div class="lt-name">' + esc(f.name) + '</div><div class="lt-meta"><span>' + (BR() ? 'Folder' : f.opaque ? 'not scanned' : plural(f.count, 'file')) + '</span></div></div>';
         const tags = tagsOf(f.path);
         return '<div class="lib-tile' + (sel ? ' is-selected' : '') + (foc ? ' is-focus' : '') + '" data-path="' + esc(f.path) + '" draggable="true" role="option" aria-selected="' + sel + '" title="' + esc(f.path) + '">' +
           thumbHTML(f, 200, 'lt-thumb') + '<div class="lt-name">' + esc(f.name) + '</div>' +
@@ -434,10 +526,10 @@
       const pd = E.dirname(f.path);
       return '<div class="lib-row is-dir' + (sel ? ' is-selected' : '') + (foc ? ' is-focus' : '') + '" style="top:' + y + 'px" data-path="' + esc(f.path) + '" data-dir="1" role="option" aria-selected="' + sel + '">' +
         '<div class="lr-name">' + icon('folder') + '<span class="lr-base">' + esc(f.name) + '</span></div>' +
-        '<div class="lr-tags"><span class="lr-count">' + (f.opaque ? 'not scanned' : plural(f.count, 'file') + (f.sub ? ', ' + plural(f.sub, 'folder') : '')) + '</span></div>' +
+        '<div class="lr-tags"><span class="lr-count">' + (BR() ? 'Folder' : f.opaque ? 'not scanned' : plural(f.count, 'file') + (f.sub ? ', ' + plural(f.sub, 'folder') : '')) + '</span></div>' +
         '<div class="lr-folder" title="' + esc(pd || 'Top level') + '">' + (pd ? esc(pd) : '<span class="muted">—</span>') + '</div>' +
         '<div class="lr-date"' + (f.lastModified ? ' title="' + esc(fullDate(f.lastModified)) + '"' : '') + '>' + (f.lastModified ? esc(ago(f.lastModified)) : '<span class="muted">—</span>') + '</div>' +
-        '<div class="lr-size">' + (f.count ? C.fmt(f.size) : '') + '</div></div>';
+        '<div class="lr-size">' + (f.count && !BR() ? C.fmt(f.size) : '') + '</div></div>';
     }
     const { base, ext } = splitName(f.name);
     const tags = tagsOf(f.path), auto = new Set(autoOf(f.path));
@@ -460,6 +552,14 @@
     canvas.style.height = L.total + 'px';
     if (!L.rows.length) {
       const v = V();
+      if (BR()) {
+        const k = L.cwd.toLowerCase();
+        let msg = '', ic = 'folder-open', spin = false;
+        if (L.query.trim() && L.search && L.search.busy) { msg = 'Searching ' + esc(L.cwd ? E.basename(L.cwd) : v.vaultName) + '…'; spin = true; }
+        else if (!L.query.trim() && !L.loaded.has(k)) { msg = 'Loading…'; spin = true; }
+        else if (!L.query.trim() && L.listErr.has(k)) { msg = esc(L.listErr.get(k)); ic = 'eye-off'; }
+        if (msg) { canvas.innerHTML = '<div class="lib-empty">' + (spin ? '<span class="spinner"></span>' : icon(ic)) + '<div>' + msg + '</div></div>'; return; }
+      }
       const empty = !L.query.trim() ? 'This folder is empty.' : 'No files match <b>' + esc(L.query) + '</b>' + (L.cwd ? ' in ' + esc(E.basename(L.cwd)) + '. <a class="mod-link" data-lib="search-everywhere">Search everywhere</a>' : '.');
       canvas.innerHTML = '<div class="lib-empty">' + icon(L.query.trim() ? 'search' : 'folder-open') + '<div>' + empty + '</div>' + (L.query ? '<button class="btn small" data-lib="clear">Clear search</button>' : '') +
         (L.query ? '<div class="lib-help">Search tips: <code>#invoice</code> <code>-#draft</code> <code>type:pdf,docx</code> <code>kind:image</code> <code>size:&gt;50mb</code> <code>modified:&lt;30d</code> <code>modified:2024</code> <code>in:Documents</code> <code>is:untagged</code> <code>is:duplicate</code></div>' : '') + '</div>';
@@ -481,6 +581,14 @@
     const files = selFiles();
     let h = '';
     const selDir = !files.length && L.sel.size === 1 ? dirBy([...L.sel][0]) : null;
+    if (selDir && BR()) {
+      h += '<div class="ld-preview ld-folder">' + icon('folder') + '</div><div class="ld-name">' + esc(selDir.name) + '</div>';
+      h += '<div class="ld-actions"><button class="btn small mod-cta" data-lib="enter">' + icon('folder-open') + 'Open</button><button class="btn small" data-lib="reveal-dir">' + icon('external-link') + 'In Explorer</button></div>';
+      h += '<div class="ld-section ld-props">' + prop('folder', 'Location', esc(absPath(selDir.path))) + (selDir.lastModified ? prop('clock', 'Changed', esc(ago(selDir.lastModified))) : '') + '</div>';
+      h += '<div class="ld-section"><button class="btn small block" data-lib="organize-dir">' + icon('sparkles') + 'Organize this folder</button><div class="ld-hint" style="margin-top:8px"><span>Opens it on its own so Onyx can plan a tidy structure. Drives and system folders stay browse-only.</span></div></div>';
+      el.innerHTML = h;
+      return;
+    }
     if (selDir) {
       const inside = V().files.filter(f => f.path.toLowerCase().startsWith(selDir.path.toLowerCase() + '/'));
       const counts = new Map();
@@ -505,7 +613,7 @@
       const kl = [...kinds.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
       const dirsHere = browsing() ? L.dirs : [];
       const allSize = total + dirsHere.reduce((a, d) => a + d.size, 0);
-      h += '<div class="ld-section"><div class="ld-title">' + (L.query.trim() ? 'Results' : L.cwd ? esc(E.basename(L.cwd)) : 'This folder') + '</div><div class="ld-big">' + (dirsHere.length ? plural(dirsHere.length, 'folder') + ', ' : '') + plural(L.files.length, 'file') + '</div><div class="muted">' + C.fmt(allSize) + (dirsHere.length ? ' including subfolders' : '') + '</div></div>';
+      h += '<div class="ld-section"><div class="ld-title">' + (L.query.trim() ? 'Results' : L.cwd ? esc(E.basename(L.cwd)) : 'This folder') + '</div><div class="ld-big">' + (dirsHere.length ? plural(dirsHere.length, 'folder') + ', ' : '') + plural(L.files.length, 'file') + '</div><div class="muted">' + (BR() ? C.fmt(total) + (L.query.trim() ? '' : ' in files here') : C.fmt(allSize) + (dirsHere.length ? ' including subfolders' : '')) + '</div></div>';
       if (kl.length && total) h += '<div class="ld-section"><div class="ld-title">Space by kind</div>' + kl.map(([k, s]) => '<button class="ld-bar" data-lib="query" data-q="kind:' + esc(k === '3D Models' ? '3d' : k.toLowerCase().replace(/s$/, '')) + '"><span class="lb-label">' + esc(k) + '</span><span class="lb-track"><span style="width:' + Math.max(2, Math.round(s / total * 100)) + '%"></span></span><span class="lb-val">' + C.fmt(s) + '</span></button>').join('') + '</div>';
       if (top.length) h += '<div class="ld-section"><div class="ld-title">Tags here</div><div class="ld-chips">' + top.map(([t, n]) => chip(t, { count: n, cls: 'is-link' })).join('') + '</div></div>';
       h += '<div class="ld-section ld-hint">' + icon('mouse-pointer', 'xs') + '<span>Select a file to see details and tag it. <b>Ctrl</b>-click or <b>Shift</b>-click to select several.</span></div>';
@@ -740,6 +848,8 @@
     else if (name === 'forward') forward();
     else if (name === 'up') up();
     else if (name === 'enter') { const d = [...L.sel][0]; if (d) go(d); }
+    else if (name === 'places') { if (C.openPlaces) C.openPlaces(); }
+    else if (name === 'organize-dir') { const d = [...L.sel][0]; if (d) organizeDir(d); }
     else if (name === 'reveal-dir') { const d = [...L.sel][0]; if (d) revealDir(d); }
     else if (name === 'tag-dir') { const d = [...L.sel][0]; if (d) tagEditor(filesInside(d)); }
     else if (name === 'search-everywhere') { const q = L.query; L.hist.push(L.cwd); L.fwd = []; L.cwd = ''; L.query = q; refresh(); renderTagsPanel(); }
@@ -835,7 +945,16 @@
   function hk(k) { return k; }
   function filesInside(d) { const low = d.toLowerCase() + '/'; return V().files.filter(f => f.path.toLowerCase().startsWith(low)).map(f => f.path); }
   function revealDir(d) { if (V().demo) { C.notice('The demo vault only exists in memory.', 'warn', 2500); return; } C.api.reveal(d); }
+  function organizeDir(d) { if (C.openFolderPath) C.openFolderPath(absPath(d)); }
   function dirMenuItems(d) {
+    if (BR()) return [
+      { label: 'Open', icon: 'folder-open', sub: 'Enter', action: () => go(d) },
+      { label: 'Show in system explorer', icon: 'external-link', action: () => revealDir(d) },
+      { label: 'Copy path', icon: 'copy', action: () => { C.api.copyText(absPath(d)); C.notice('Copied path', 'success', 1800); } },
+      'sep',
+      { label: 'Search in this folder', icon: 'search', action: () => { go(d); const i = $('#libSearch'); if (i) i.focus(); } },
+      { label: 'Organize this folder', icon: 'sparkles', action: () => organizeDir(d) },
+    ];
     const n = filesInside(d).length;
     return [
       { label: 'Open', icon: 'folder-open', sub: 'Enter', action: () => go(d) },
@@ -1016,34 +1135,36 @@
     const y = el.scrollTop;
     const q = L.query.trim();
     const now = Date.now();
-    const untagged = v.files.filter(f => !tagsOf(f.path).length).length;
+    const br = !!v.browse;
+    const untagged = br ? 0 : v.files.filter(f => !tagsOf(f.path).length).length;
     const tagged = v.files.length - untagged;
-    const item = (ic, label, query, count, extra) => '<div class="tp-item' + (q === query ? ' is-active' : '') + '" data-q="' + esc(query) + '" tabindex="0" role="button">' + icon(ic) + '<span class="tp-label">' + esc(label) + '</span>' + (extra || '') + '<span class="tp-count">' + count + '</span></div>';
+    const item = (ic, label, query, count, extra) => '<div class="tp-item' + (q === query ? ' is-active' : '') + '" data-q="' + esc(query) + '" tabindex="0" role="button">' + icon(ic) + '<span class="tp-label">' + esc(label) + '</span>' + (extra || '') + '<span class="tp-count">' + (br ? '' : count) + '</span></div>';
     let h = '';
     if (L.run) h += '<div class="tp-run"><span class="spinner"></span><span>' + (L.run.mode === 'ai' ? 'Tagging with AI' : 'Tagging') + (L.run.of > 1 ? ' · ' + L.run.batch + '/' + L.run.of : '') + '…</span>' + (L.run.mode === 'ai' ? '<a class="mod-link" data-tp="cancel">Stop</a>' : '') + '</div>';
-    else if (untagged && (!tagged || untagged / v.files.length > 0.5) && !v.demo || untagged && !tagged) {
+    else if (!br && (untagged && (!tagged || untagged / v.files.length > 0.5) && !v.demo || untagged && !tagged)) {
       h += '<div class="tp-cta"><div class="tp-cta-title">' + icon('sparkles') + plural(untagged, 'file') + ' without tags</div><div class="tp-cta-sub">Let AI read the names and tag them, so you can find anything by topic, project or purpose.</div>' +
         '<div class="tp-cta-row"><button class="btn small mod-cta" data-tp="ai">Tag with AI</button><button class="btn small" data-tp="rules">Offline</button></div></div>';
     }
     h += '<div class="tp-section"><div class="tp-title">Library</div>' +
-      '<div class="tp-item' + (!q && !L.cwd ? ' is-active' : '') + '" data-tp="home" tabindex="0" role="button">' + icon('folder-open') + '<span class="tp-label">Browse folders</span><span class="tp-count">' + v.files.length + '</span></div>' +
-      item('clock', 'Changed this week', 'modified:<7d', v.files.filter(f => now - f.lastModified <= 7 * DAY).length) +
-      item('inbox', 'Untagged', 'is:untagged', untagged) +
-      item('copy', 'Duplicates', 'is:duplicate', dupSet().size) +
-      item('hard-drive', 'Large files', 'size:>100mb', v.files.filter(f => f.size >= 100 * 1048576).length) + '</div>';
+      '<div class="tp-item' + (!q && !L.cwd ? ' is-active' : '') + '" data-tp="home" tabindex="0" role="button">' + icon('folder-open') + '<span class="tp-label">Browse folders</span><span class="tp-count">' + (br ? '' : v.files.length) + '</span></div>' +
+      item('clock', 'Changed this week', 'modified:<7d', br ? 0 : v.files.filter(f => now - f.lastModified <= 7 * DAY).length) +
+      (br ? '' : item('inbox', 'Untagged', 'is:untagged', untagged) + item('copy', 'Duplicates', 'is:duplicate', dupSet().size)) +
+      item('hard-drive', 'Large files', 'size:>100mb', br ? 0 : v.files.filter(f => f.size >= 100 * 1048576).length) + '</div>' +
+      (br ? '<div class="tp-note">' + icon('shield-check', 'xs') + '<span><b>Browse only.</b> Searches here look through the folder you’re in and everything below it.</span></div>' : '');
     const saved = tagState().saved || [];
     h += '<div class="tp-section"><div class="tp-title">Saved searches<span class="spacer"></span>' + (q && !saved.some(s => s.query.trim() === q) ? '<button class="clickable-icon" data-tp="save" data-tip="Save current search" aria-label="Save current search">' + icon('plus') + '</button>' : '') + '</div>' +
       (saved.length ? saved.map((s, i) => {
-        const r = TG.parseQuery(s.query); const ctx = { now, dups: dupSet() };
-        const n = v.files.filter(f => TG.matchFile(f, tagsOf(f.path), r, ctx)).length;
+        const r = TG.parseQuery(s.query); const ctx = { now, dups: br ? null : dupSet() };
+        const n = br ? '' : v.files.filter(f => TG.matchFile(f, tagsOf(f.path), r, ctx)).length;
         return '<div class="tp-item' + (q === s.query.trim() ? ' is-active' : '') + '" data-q="' + esc(s.query) + '" data-saved="' + i + '" tabindex="0" role="button" title="' + esc(s.query) + '">' + icon('bookmark') + '<span class="tp-label">' + esc(s.name) + '</span><span class="tp-count">' + n + '</span></div>';
       }).join('') : '<div class="tp-empty">Search in the Library, then save it here. Try <a class="mod-link" data-q="modified:<30d kind:document">recent documents</a>.</div>') + '</div>';
     const kinds = new Map();
     for (const f of v.files) { const k = E.typeGroup(f.extension); kinds.set(k, (kinds.get(k) || 0) + 1); }
-    const kindRows = TG.KINDS.filter(([g]) => kinds.get(g)).map(([g, alias, label]) => item(window.fileIconName(alias === '3d' ? 'obj' : ({ image: 'jpg', document: 'pdf', video: 'mp4', audio: 'mp3', code: 'js', archive: 'zip', installer: 'exe', design: 'psd', ebook: 'epub', font: 'ttf' })[alias] || ''), label, 'kind:' + alias, kinds.get(g)));
+    const kindRows = TG.KINDS.filter(([g]) => br ? g !== 'Other' : kinds.get(g)).map(([g, alias, label]) => item(window.fileIconName(alias === '3d' ? 'obj' : ({ image: 'jpg', document: 'pdf', video: 'mp4', audio: 'mp3', code: 'js', archive: 'zip', installer: 'exe', design: 'psd', ebook: 'epub', font: 'ttf' })[alias] || ''), label, 'kind:' + alias, kinds.get(g)));
     if (kindRows.length) h += '<div class="tp-section' + (store.get('tp.kinds', true) ? '' : ' is-collapsed') + '"><div class="tp-title tp-toggle" data-tp="toggle-kinds">' + icon('chevron-down', 'xs') + 'Kinds</div><div class="tp-body">' + kindRows.join('') + '</div></div>';
     const counts = new Map();
-    for (const f of v.files) for (const t of tagsOf(f.path)) counts.set(t, (counts.get(t) || 0) + 1);
+    if (br) { for (const e of Object.values(tagState().files)) for (const t of e.t || []) counts.set(t, (counts.get(t) || 0) + 1); }
+    else for (const f of v.files) for (const t of tagsOf(f.path)) counts.set(t, (counts.get(t) || 0) + 1);
     let tags = [...counts.entries()];
     if (U().tagSort === 'name') tags.sort((a, b) => C.collator.compare(a[0], b[0])); else tags.sort((a, b) => b[1] - a[1] || C.collator.compare(a[0], b[0]));
     const f = L.tagFilter.trim().toLowerCase();
@@ -1162,9 +1283,11 @@
         }
         out.sort((a, b) => b.score - a.score);
         shown = out.slice(0, 60);
+        if (v.browse) shown.unshift({ search: raw, html: 'Search <b>' + esc(L.cwd ? E.basename(L.cwd) : v.vaultName) + '</b> for “' + esc(raw) + '”', note: 'looks through every folder' });
       }
       sel = Math.min(sel, Math.max(0, shown.length - 1));
       list.innerHTML = shown.length ? shown.map((s, i) => {
+        if (s.search) return '<div class="suggestion-item' + (i === sel ? ' is-selected' : '') + '" role="option" data-i="' + i + '">' + icon('search') + '<span>' + s.html + '</span><span class="note">' + esc(s.note) + '</span></div>';
         const tags = tagsOf(s.f.path);
         return '<div class="suggestion-item qf-item' + (i === sel ? ' is-selected' : '') + '" role="option" data-i="' + i + '">' + icon(window.fileIconName(s.f.extension)) +
           '<div class="qf-main"><div class="qf-name">' + s.html + '</div><div class="qf-path">' + esc(E.dirname(s.f.path) || 'Top level') + '</div></div>' +
@@ -1174,6 +1297,7 @@
     }
     function choose(i, how) {
       const s = shown[i]; if (!s) return; m.close();
+      if (s.search) { showLibrary(); L.query = s.search; const inp = $('#libSearch'); if (inp) inp.value = s.search; refresh(); return; }
       const p = s.f.path;
       if (how === 'open') { openFile(p); return; }
       if (how === 'reveal') { reveal(p); return; }
@@ -1199,9 +1323,10 @@
     C.api.onTagProgress(p => { if (L.run) { L.run.batch = p.batch; L.run.of = p.of; renderProgress(); renderTagsPanel(); } });
   }
   window.OnyxLibrary = {
-    init, renderLibrary, renderTagsPanel, refresh, quickFind, go, back, forward, up, revealFile,
+    init, renderLibrary, renderTagsPanel, refresh, quickFind, go, back, forward, up, revealFile, ensureListed, isListed,
     get cwd() { return L.cwd; }, tagEditor, autoTag, autoTagMenu, saveSearch, setQuery, showLibrary,
     tagColor, tagsOf, clearAuto,
+    reload() { const v = V(); if (!v) return; if (v.browse) { v.files = []; v.dirs = []; L.loaded = new Set(); L.loading = new Map(); L.listErr = new Map(); L.search = null; } refresh(); renderTagsPanel(); if (C.renderExplorer) C.renderExplorer(); if (v.browse) ensureListed(L.cwd); },
     get selection() { return [...L.sel]; },
     get query() { return L.query; },
     toggleView() { setPref('view', U().view === 'grid' ? 'list' : 'grid'); },

@@ -408,6 +408,7 @@
     'music audio sounds sound songs downloads download files file misc miscellaneous other others stuff random new newfolder untitled untitledfolder folder ' +
     'desktop archives archive compressed zips spreadsheets presentations pdfs pdf scans screenshots installers setups setup programs software ' +
     'fonts ebooks books 3dmodels models design graphics wallpapers temp tmp unsorted uncategorized sort tosort inbox dump junk loosefiles').split(' ').map(cmpKey));
+  const DUMP_KEYS = new Set(['downloads', 'download', 'desktop', 'documents', 'document', 'mydocuments', 'newfolder', 'untitledfolder', 'misc', 'miscellaneous', 'stuff', 'temp', 'tmp', 'unsorted', 'other', 'others', 'random', 'files', 'inbox']);
   function dirKey(name) { return cmpKey(String(name).replace(/\s*\(\d+\)$/, '').replace(/[\s_-]+\d+$/, '')); }
 
   function classifyDirs(files, dirs, st, ctx) {
@@ -436,6 +437,8 @@
       if (named(st.keepFolders, name)) { kind = 'bundle'; why = 'you marked it to keep together'; }
       else if (named(st.openFolders, name)) { kind = 'generic'; why = 'you allowed reorganizing inside it'; }
       else if (ctx.projectDirs.has(k)) { kind = 'bundle'; why = 'project folder'; }
+      // Downloads, Desktop, Documents, New folder…: dumping grounds, never a bundle just because a model sits next to a picture
+      else if (DUMP_KEYS.has(dirKey(name)) || VAGUE.has(normKey(name))) { kind = 'generic'; why = 'general-purpose folder'; }
       else if ((exts.has('html') || exts.has('htm')) && any(WEB_EXTS)) { kind = 'bundle'; why = 'web project: HTML with its scripts'; }
       else if (n(CODE_EXTS) >= 2 && (codeKinds >= 2 || any(CONFIG_EXTS))) { kind = 'bundle'; why = 'code project: scripts that work together'; }
       else if (n(CODE_EXTS) >= 3) { kind = 'bundle'; why = 'code project: scripts that work together'; }

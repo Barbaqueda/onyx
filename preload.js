@@ -35,4 +35,8 @@ contextBridge.exposeInMainWorld('onyx', {
   onTagProgress: (cb) => ipcRenderer.on('tag-progress', (e, p) => cb(p)),
   openFile: (rel) => ipcRenderer.invoke('open-file', rel),
   thumb: (rel, size) => ipcRenderer.invoke('file-thumb', { rel, size }),
+  // browsing drives and other big locations
+  listDir: (rel) => ipcRenderer.invoke('list-dir', rel),
+  searchDir: (rel, query, limit) => ipcRenderer.invoke('search-dir', { rel, query, limit }),
+  listPlaces: () => ipcRenderer.invoke('list-places'),
 });

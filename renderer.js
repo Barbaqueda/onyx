@@ -303,7 +303,7 @@
   function renderExplorer() {
     const el = $('#explorer');
     $('#vaultSwitcher .name').textContent = S.vault ? S.vault.vaultName : 'No vault open';
-    if (!S.vault) { el.innerHTML = '<div class="nav-empty">No folder open.<br><a class="mod-link" data-action="open-folder">Open a folder</a></div>'; return; }
+    if (!S.vault) { el.innerHTML = '<div class="nav-empty">No folder open.<br><a class="mod-link" data-action="open-folder">Open a folder</a><br><a class="mod-link" data-action="places">Browse This PC</a></div>'; return; }
     const f = S.explorerFilter.trim().toLowerCase();
     const plan = planBySource();
     const ex = UI().explorer;
@@ -371,7 +371,13 @@
     if (v === 'library') { LIB.renderLibrary(el); return; }
     if (v === 'tags') { LIB.renderTagsPanel(el); return; }
     el.classList.toggle('busy', S.busy);
+    if (v === 'structure' && S.vault && S.vault.browse) { el.innerHTML = browseOverviewHTML(); return; }
     if (v === 'structure') { const y = el.scrollTop; el.innerHTML = S.vault ? structureHTML() : emptyStateHTML(); el.scrollTop = y; return; }
+    if (S.vault && S.vault.browse && (v === 'graph' || v === 'changes')) {
+      if (v === 'graph' && S.graphInst) { S.graphInst.destroy(); S.graphInst = null; }
+      el.innerHTML = '<div class="empty-state"><div class="empty-inner">' + icon('shield-check') + '<div class="sub">' + (v === 'graph' ? 'The graph maps a folder Onyx has fully read. Open a folder (not a whole drive) to see it.' : 'Nothing to change here: this location is browse-only.') + '</div><button class="btn" data-action="view-library">' + icon('library') + 'Browse in the Library</button></div></div>';
+      return;
+    }
     if (!S.vault) {
       if (v === 'graph' && S.graphInst) { S.graphInst.destroy(); S.graphInst = null; }
       el.innerHTML = '<div class="empty-state"><div class="empty-inner"><img class="logo small" src="icon.png" alt=""><div class="sub">' + (v === 'graph' ? 'The graph shows your folder as a map once a folder is open.' : 'Every move Onyx proposes will be listed here.') + '</div><button class="btn mod-cta" data-action="open-folder">' + icon('folder-open') + 'Open folder</button></div></div>';
@@ -398,6 +404,7 @@
       '<h1>Onyx</h1><div class="sub">Open a messy folder. Onyx proposes a clean structure, you review it, and nothing moves until you say so.</div>' +
       '<div class="empty-actions">' +
       '<button class="empty-action" data-action="open-folder">' + icon('folder-open') + 'Open folder as vault' + k('open-folder') + '</button>' +
+      '<button class="empty-action" data-action="places">' + icon('monitor') + 'Browse This PC<span class="hint">Explore whole drives, browse-only</span></button>' +
       '<button class="empty-action" data-action="demo">' + icon('flask-conical') + 'Try the demo vault<span class="hint">Nothing on disk is touched</span></button>' +
       '<button class="empty-action" data-action="palette">' + icon('terminal-square') + 'Open command palette' + k('palette') + '</button>' +
       '<button class="empty-action" data-action="settings-appearance">' + icon('palette') + 'Make it yours: themes, fonts, layout' + k('settings') + '</button>' +
@@ -408,6 +415,16 @@
       '</div></div>';
   }
 
+  function browseOverviewHTML() {
+    const V = S.vault;
+    return '<div class="markdown-reading-view"><div class="inline-title">' + esc(V.vaultName) + '</div>' +
+      '<div class="metadata"><div class="metadata-title">' + icon('info', 'xs') + 'Properties</div>' +
+      prop('hard-drive', 'location', '<span class="muted">' + esc(V.rootPath) + '</span>') +
+      prop('shield-check', 'mode', '<span class="tag grey">browse only</span>') + '</div>' +
+      callout('tip', 'shield-check', 'Explore, search and tag, safely', '<p>' + esc(V.rootPath) + ' is a drive or system folder. Onyx lets you browse it like File Explorer, search it, preview and open files, and tag them, but it will never move anything here.</p>' +
+        '<p style="margin-top:10px">To tidy a folder inside it, right-click the folder in the Library and choose <b>Organize this folder</b>.</p>' +
+        '<p style="margin-top:12px"><button class="btn mod-cta" data-action="view-library">' + icon('library') + 'Browse in the Library</button> <button class="btn" data-action="places">' + icon('monitor') + 'This PC</button></p>') + '</div>';
+  }
   function prop(ic, key, val) { return '<div class="metadata-property"><div class="metadata-key">' + icon(ic) + esc(key) + '</div><div class="metadata-value">' + val + '</div></div>'; }
   function callout(kind, ic, title, body) { return '<div class="callout ' + kind + '"><div class="callout-title">' + icon(ic) + esc(title) + '</div><div class="callout-content">' + body + '</div></div>'; }
 
@@ -665,7 +682,7 @@
   // ======================================================================= right sidebar
   function renderSide() {
     const V = S.vault, P = S.plan;
-    let h = '<div class="side-section"><div class="side-section-title">Strategy</div><div class="strategy-list" role="radiogroup" aria-label="Strategy">';
+    let h = '<div class="side-section"><div class="side-section-title">Strategy</div><div class="strategy-list" role="radiogroup" aria-label="Strategy"' + (V && V.browse ? ' style="display:none"' : '') + '>';
     for (const s of STRATEGIES) {
       h += '<button class="strategy' + (s.id === S.strategy ? ' is-active' : '') + '" role="radio" aria-checked="' + (s.id === S.strategy) + '" data-action="set-strategy" data-id="' + s.id + '">' + icon(s.icon) +
         '<div><div class="s-name">' + esc(s.name) + (s.badge ? '<span class="badge">' + s.badge + '</span>' : '') + '</div><div class="s-desc">' + esc(s.desc) + '</div></div></button>';
@@ -673,7 +690,8 @@
     h += '</div>';
     const progress = S.progress && S.progress.of > 1 ? ' ' + S.progress.batch + '/' + S.progress.of : '';
     const ok = hotkeyLabel(effectiveHotkey('organize'));
-    h += '<button class="btn mod-cta block organize-btn" data-action="organize"' + (!V || S.busy ? ' disabled' : '') + '>' +
+    if (V && V.browse) h += '<div class="browse-note">' + icon('shield-check') + '<div><span class="bn-title">Browse only</span><span>' + esc(V.rootPath) + ' is a drive or system folder, so Onyx won’t reorganize it. Right-click a folder in the Library and choose <b>Organize this folder</b> to sort it.</span></div></div>';
+    h += '<button class="btn mod-cta block organize-btn" data-action="organize"' + (!V || S.busy || (V && V.browse) ? ' disabled' : '') + '>' +
       (S.busy ? '<span class="spinner"></span>' + (S.strategy === 'smart' ? 'Asking AI…' + progress : 'Working…') : icon(stratById(S.strategy).icon) + (P ? 'Organize again' : 'Organize') + (ok ? '<kbd>' + esc(ok) + '</kbd>' : '')) + '</button>';
     if (!V) h += '<div class="side-note">Open a folder to get started.</div>';
     h += '</div>';
@@ -707,7 +725,7 @@
       h += '<div class="side-section"><div class="side-section-title">AI<span class="spacer"></span><a class="mod-link" data-action="settings-ai" tabindex="0">Configure</a></div>' +
         '<button class="ai-card" data-action="settings-ai"><span class="dot ' + dotCls + '"></span><div class="grow"><div class="t1">' + esc(prov.label || ai.provider) + '</div><div class="t2">' + esc(sub) + '</div></div>' + icon('chevron-right', 'xs') + '</button></div>';
     }
-    if (V && !V.demo) {
+    if (V && !V.demo && !V.browse) {
       h += '<div class="side-section"><div class="side-section-title">History</div>' +
         '<div class="history-line">' + (V.undo ? 'Last organize moved ' + plural(V.undo.count, 'file') + ' · ' + ago(V.undo.at) : 'Onyx hasn’t changed anything in this folder yet.') + '</div>' +
         '<button class="btn block" data-action="undo"' + (V.undo && !S.busy ? '' : ' disabled') + '>' + icon('undo-2') + 'Undo last organize</button></div>';
@@ -725,7 +743,8 @@
     let h = '';
     if (S.busy) h += '<div class="status-bar-item"><span class="spinner" style="width:11px;height:11px;border-width:1.5px"></span>' + (S.strategy === 'smart' ? 'Asking AI' : 'Working') + '</div>';
     if (P) { const n = P.items.filter(isMoving).length; h += '<div class="status-bar-item clickable accent" data-action="view-changes">' + icon('arrow-left-right') + plural(n, 'change') + ' pending</div>'; }
-    if (V) h += '<div class="status-bar-item">' + plural(V.files.length, 'file') + '</div><div class="status-bar-item">' + plural(V.dirs.length, 'folder') + '</div>';
+    if (V && V.browse) h += '<div class="status-bar-item" data-tip="Browse only: Onyx won’t reorganize this location">' + icon('shield-check') + 'Browsing ' + esc(V.rootPath) + '</div>';
+    else if (V) h += '<div class="status-bar-item">' + plural(V.files.length, 'file') + '</div><div class="status-bar-item">' + plural(V.dirs.length, 'folder') + '</div>';
     const r = T.resolve(S.settings ? S.settings.ui : {});
     h += '<div class="status-bar-item clickable" data-action="theme-menu" data-tip="Appearance">' + icon('palette') + esc(r.p.name) + '</div>';
     if (S.settings) {
@@ -905,7 +924,14 @@
   async function afterOpen(r, quiet) {
     if (!r || r.cancelled) return;
     if (r.error) { modal({ title: 'Can’t open this folder', html: '<p>' + esc(r.error) + '</p>', buttons: [{ label: 'OK', cls: 'mod-cta' }] }); return; }
-    setVault(r); await loadSettings(); renderAll();
+    setVault(r); await loadSettings();
+    if (r.browse) {
+      if (!WS.isVisible('library')) WS.activate('library', { noRender: true });
+      renderAll(); LIB.ensureListed('');
+      if (!quiet) notice('Browsing <b>' + esc(r.rootPath) + '</b>. Explore, search and tag anything here. Onyx won’t reorganize a whole drive or system folder.', 'success', 7000);
+      return;
+    }
+    renderAll();
     if (!quiet) notice('Opened <b>' + esc(r.vaultName) + '</b> · ' + plural(r.files.length, 'file'), 'success');
     autoTagNotice(r);
   }
@@ -915,10 +941,31 @@
       { label: 'Open Library', run: () => LIB.showLibrary() }), 600);
   }
   async function openFolder() { afterOpen(await api.pickFolder()); }
+  async function openFolderPath(p) { const r = await api.openRecent(p); if (r && r.error) { modal({ title: 'Can’t open this folder', html: '<p>' + esc(r.error) + '</p>', buttons: [{ label: 'OK', cls: 'mod-cta' }] }); return; } afterOpen(r); }
+  // This PC: drives and the usual folders
+  async function openPlaces() {
+    const r = await api.listPlaces();
+    const gb = n => n ? (n / 1073741824 >= 100 ? Math.round(n / 1073741824) : (n / 1073741824).toFixed(1)) + ' GB' : '';
+    const drive = d => {
+      const used = d.total ? Math.round((1 - d.free / d.total) * 100) : 0;
+      return '<button class="place drive" data-place="' + esc(d.path) + '">' + icon('hard-drive') + '<div class="pl-main"><div class="pl-name">' + esc(d.name === 'Computer' ? 'Computer' : 'Local Disk (' + d.name + ')') + '</div>' +
+        (d.total ? '<div class="pl-bar"><span style="width:' + used + '%"' + (used > 90 ? ' class="full"' : '') + '></span></div><div class="pl-sub">' + gb(d.free) + ' free of ' + gb(d.total) + '</div>' : '<div class="pl-sub">Browse only</div>') + '</div></button>';
+    };
+    const place = p => '<button class="place" data-place="' + esc(p.path) + '">' + icon(p.name === 'Home' ? 'folder' : p.name === 'Pictures' ? 'image' : p.name === 'Music' ? 'music' : p.name === 'Videos' ? 'film' : p.name === 'Downloads' ? 'download' : 'folder') +
+      '<div class="pl-main"><div class="pl-name">' + esc(p.name) + '</div><div class="pl-sub">' + (p.browseOnly ? 'Browse only' : 'Browse and organize') + '</div></div></button>';
+    const m = modal({
+      title: 'This PC', cls: 'mod-places',
+      html: '<p class="muted" style="margin-bottom:12px">Drives and system folders open <b>browse-only</b>: explore, search and tag everything, but Onyx won’t reorganize them. Ordinary folders like Downloads can be organized.</p>' +
+        '<div class="pl-title">Drives</div><div class="pl-grid">' + (r.drives || []).map(drive).join('') + '</div>' +
+        '<div class="pl-title">Folders</div><div class="pl-grid">' + (r.places || []).map(place).join('') + '</div>',
+    });
+    m.box.addEventListener('click', e => { const b = e.target.closest('[data-place]'); if (!b) return; m.close(); openFolderPath(b.dataset.place); });
+  }
   async function openRecent(p, quiet) { const r = await api.openRecent(p); if (r.error) { if (!quiet) notice(esc(r.error), 'error'); return; } afterOpen(r, quiet); }
   async function loadDemo() { const r = await api.loadDemo(); setVault(r); renderAll(); notice('Demo vault loaded. Nothing on your disk will be touched.', 'success'); }
   async function rescan() {
     if (!S.vault) return;
+    if (S.vault.browse) { LIB.reload(); notice('Reloaded from disk'); return; }
     const r = await api.rescan();
     const keepSel = S.selected;
     S.vault = r; S.plan = null; S.selected = keepSel;
@@ -928,6 +975,7 @@
   async function organize(strategy) {
     if (strategy) setStrategy(strategy);
     if (!S.vault) { notice('Open a folder first', 'warn'); return; }
+    if (S.vault.browse) { notice('Onyx doesn’t reorganize a whole drive or system folder. In the Library, right-click a folder and choose <b>Organize this folder</b>.', 'warn', 7000); return; }
     if (S.busy) return;
     S.busy = true; S.progress = null;
     renderSide(); renderStatus(); document.querySelectorAll('.view-content').forEach(el => el.classList.add('busy'));
@@ -1004,6 +1052,7 @@
     const items = [];
     if (recent.length) { items.push({ heading: 'Recent' }); for (const p of recent) items.push({ label: p.split(/[\\/]/).filter(Boolean).pop() || p, sub: p, icon: 'folder', action: () => openRecent(p) }); items.push('sep'); }
     items.push({ label: 'Open folder…', icon: 'folder-open', action: openFolder });
+    items.push({ label: 'Browse This PC…', icon: 'monitor', sub: 'drives', action: openPlaces });
     items.push({ label: 'Open demo vault', icon: 'flask-conical', action: loadDemo });
     if (S.vault && !S.vault.demo) items.push({ label: 'Show in system explorer', icon: 'external-link', action: () => api.reveal('') });
     showMenu(items, r.left, r.top, { above: true });
@@ -1027,6 +1076,7 @@
     { id: 'palette', name: 'Open command palette', hk: 'Mod+P', run: () => openPalette() },
     { id: 'open-folder', name: 'Open folder as vault', hk: 'Mod+O', run: openFolder },
     { id: 'demo', name: 'Open demo vault', run: loadDemo },
+    { id: 'places', name: 'Files: Browse This PC (drives)', run: () => openPlaces() },
     { id: 'organize', name: 'Organize: Run with current strategy', hk: 'Mod+Enter', run: () => organize() },
     ...STRATEGIES.map(s => ({ id: 'organize-' + s.id, name: 'Organize: ' + s.name, run: () => organize(s.id) })),
     { id: 'apply', name: 'Plan: Apply changes', hk: 'Mod+Shift+Enter', run: () => confirmApply() },
@@ -1159,13 +1209,13 @@
   function toggleFolder(row) {
     const set = row.dataset.tree === 'explorer' ? S.explorerOpen : S.proposedOpen;
     const p = row.dataset.path;
-    if (set.has(p)) set.delete(p); else set.add(p);
+    if (set.has(p)) set.delete(p); else { set.add(p); if (S.vault && S.vault.browse && !LIB.isListed(p)) LIB.ensureListed(p); }
     if (row.dataset.tree === 'explorer') renderExplorer(); else { const t = $('#proposedTree'); if (t) t.innerHTML = proposedTreeHTML(); }
   }
 
   // ======================================================================= click / context handling
   const ACTIONS = {
-    'open-folder': openFolder, 'demo': loadDemo, 'organize': () => organize(), 'apply': confirmApply, 'undo': confirmUndo, 'rescan': rescan,
+    'open-folder': openFolder, 'demo': loadDemo, 'places': () => openPlaces(), 'organize': () => organize(), 'apply': confirmApply, 'undo': confirmUndo, 'rescan': rescan,
     'discard': () => { S.plan = null; renderAll(); },
     'settings': () => openSettings(), 'settings-ai': () => openSettings('ai'), 'settings-organizing': () => openSettings('organizing'), 'settings-appearance': () => openSettings('appearance'), 'settings-rules': () => openSettings('rules'),
     'palette': () => openPalette(), 'help': () => openHelp(),
@@ -1262,6 +1312,7 @@
   LIB.init({
     get S() { return S; }, api, E, T, WS, UI, setUi, modal, notice, esc, icon, confirmModal, textPrompt, showMenu, fuzzy, collator, fmt, isMac,
     emptyState: () => emptyStateHTML(),
+    openPlaces: () => openPlaces(), openFolderPath: (p) => openFolderPath(p),
     renderExplorer: () => renderExplorer(), renderAll: () => renderAll(), select: (p, from) => select(p, from), openSettings: (t) => openSettings(t),
   });
   function openHelp() {

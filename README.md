@@ -88,6 +88,8 @@ flowchart LR
 
 The **Library** is a file explorer that also understands tags. Browse folder by folder like Windows Explorer, with a clickable address bar, Back / Forward / Up (<kbd>Alt</kbd> <kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd>, <kbd>Backspace</kbd>, or your mouse's side buttons), double-click to open, and folder sizes at a glance. Or switch to **All files** and see everything inside a folder in one list. Searching looks through the current folder and everything in it: type a name, click a tag, or combine filters like `#invoice type:pdf modified:2024`. Clicking a folder in the Files tree opens it here, just like Explorer's navigation pane.
 
+**Browse whole drives.** Open *This PC* to explore `C:\`, any other drive, your user folder or Program Files, folder by folder, the way Explorer does. Folders load as you open them, so even a full drive is instant, and search looks through everything below where you are. These locations are **browse-only**: you can search, preview, open and tag anything, but Onyx refuses to reorganize a drive or system folder. When you want to tidy something, right-click a folder and choose **Organize this folder**.
+
 <p align="center">
   <img src="docs/library.png" alt="The Library: every file with its tags, folder, date and size, the Tags panel on the left, and a preview with editable tags on the right" width="100%">
 </p>
@@ -272,7 +274,7 @@ All of these can be changed in **Settings → Hotkeys**.
 - **Nothing moves until you apply.** Planning is read-only.
 - **Never overwrites.** Clashes get ` (2)`, ` (3)`, and so on.
 - **Every apply can be undone**, even after restarting Onyx.
-- **Refuses dangerous places**: drive roots, Windows and Program Files, your whole user folder.
+- **Refuses to reorganize dangerous places**: drive roots, Windows and Program Files, your whole user folder. You can still browse, search and tag them.
 - **Skips system files** like `desktop.ini`, `Thumbs.db` and `pagefile.sys`, and never opens `node_modules`, `.git` or virtual environments.
 - **AI can't escape the folder.** Paths are sanitized and checked before anything is planned.
 

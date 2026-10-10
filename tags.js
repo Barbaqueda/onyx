@@ -575,6 +575,13 @@
     const at = f => { const k = idx.get(f.path.toLowerCase()); const e = k != null ? db.files[k] : null; return e && e.ai ? +e.ai : 0; };
     return files.map(f => [f, at(f)]).sort((a, b) => a[1] - b[1]).map(x => x[0]);
   }
+  // every tagged entry (for browse-only locations, where there's no full file list)
+  function viewAll(db) {
+    db = cleanDb(db);
+    const out = {};
+    for (const [k, e] of Object.entries(db.files)) if (e && e.t && e.t.length && !e.g) put(out, k, { t: e.t.slice(), a: (e.a || []).filter(t => e.t.includes(t)) });
+    return { files: out, colors: Object.assign({}, db.colors), saved: db.saved.slice() };
+  }
   function needsAuto(db, files, source) {
     db = cleanDb(db);
     const idx = index(db);
@@ -593,6 +600,6 @@
   return {
     normTag, tagLabel, tagFolder, hashColor, autoTags, aiTagBatches, parseAiTags, AI_TAG_SYSTEM,
     parseQuery, isEmptyQuery, matchFile, duplicateSet, tokenize, KINDS, tagMatches,
-    emptyDb, cleanDb, reconcile, applyMoves, edit, applyAuto, clearAuto, renameTag, deleteTag, view, needsAuto, aiOrder, primaryTag, syncRules,
+    emptyDb, cleanDb, reconcile, applyMoves, edit, applyAuto, clearAuto, renameTag, deleteTag, view, viewAll, needsAuto, aiOrder, primaryTag, syncRules,
   };
 });

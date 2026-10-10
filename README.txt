@@ -1,4 +1,4 @@
-Onyx 2.3 - source
+Onyx 2.4 - source
 =================
 
 EASIEST: double-click "Build Onyx.bat"
@@ -12,6 +12,9 @@ LIBRARY AND TAGS (Ctrl+L)
   (address bar, Back/Forward/Up, Alt+arrows, Backspace, double-click to
   open), or every file in one list. List or grid, thumbnails, a details
   panel, and tags.
+  This PC     browse whole drives (C:\), your user folder or Program Files.
+               Browse-only: search, open and tag anything, but Onyx won't
+               reorganize them. Right-click a folder > Organize this folder.
   Tags         added automatically from names (offline), by AI (one click,
                names only), or by hand: select files and press #, or drag
                them onto a tag. Tags live in Onyx's app-data folder; your
