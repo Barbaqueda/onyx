@@ -203,18 +203,36 @@ try {
     Step 'Setting up AI on this PC'
     $ollama = Find-Ollama
     if (-not $ollama) {
-      Write-Host 'Installing Ollama...'
-      $winget = Get-Command winget.exe -ErrorAction SilentlyContinue
-      if ($winget) { & winget.exe install -e --id Ollama.Ollama --silent --accept-package-agreements --accept-source-agreements --disable-interactivity | Out-Host }
-      $ollama = Find-Ollama
-      if (-not $ollama) {
-        $setup = Join-Path $Cache 'OllamaSetup.exe'
-        Write-Host 'Downloading the Ollama installer (about 1 GB)...'
-        Download 'https://ollama.com/download/OllamaSetup.exe' $setup
-        $sig = Get-AuthenticodeSignature $setup
-        if ($sig.Status -ne 'Valid' -or $sig.SignerCertificate.Subject -notmatch 'Ollama') { Remove-Item $setup -Force; throw 'the Ollama installer is not signed by Ollama, so it was not run' }
-        Start-Process -FilePath $setup -ArgumentList '/VERYSILENT', '/NORESTART', '/SUPPRESSMSGBOXES' -Wait
+      # Download the installer ourselves so there's a real progress bar, check it's signed by Ollama,
+      # then run it with its own small progress window (no questions asked)
+      $setup = Join-Path $Cache 'OllamaSetup.exe'
+      $signed = { param($f) $sig = Get-AuthenticodeSignature $f; $sig.Status -eq 'Valid' -and $sig.SignerCertificate.Subject -match 'Ollama' }
+      if (-not ((Test-Path $setup) -and (& $signed $setup))) {
+        Write-Host 'Downloading Ollama (about 1 GB):'
+        try { Download 'https://ollama.com/download/OllamaSetup.exe' $setup } catch { Remove-Item $setup -Force -ErrorAction SilentlyContinue }
+      }
+      if ((Test-Path $setup) -and (& $signed $setup)) {
+        Write-Host 'Installing Ollama (a progress window opens)...'
+        $proc = Start-Process -FilePath $setup -ArgumentList '/SILENT', '/NORESTART', '/SUPPRESSMSGBOXES' -PassThru
+        $t0 = Get-Date
+        while (-not $proc.HasExited) {
+          $e = (Get-Date) - $t0
+          Write-Host -NoNewline ("`r  Installing... {0:m\:ss}  " -f $e)
+          Start-Sleep -Milliseconds 500
+        }
+        Write-Host ("`r  Installed in {0:m\:ss}.      " -f ((Get-Date) - $t0))
         $ollama = Find-Ollama
+      } elseif (Test-Path $setup) {
+        Remove-Item $setup -Force
+        Write-Host 'The downloaded installer is not signed by Ollama, so it was not run.' -ForegroundColor Yellow
+      }
+      if (-not $ollama) {
+        $winget = Get-Command winget.exe -ErrorAction SilentlyContinue
+        if ($winget) {
+          Write-Host 'Trying Windows Package Manager instead...'
+          & winget.exe install -e --id Ollama.Ollama --accept-package-agreements --accept-source-agreements
+          $ollama = Find-Ollama
+        }
       }
       if (-not $ollama) { throw 'Ollama did not install' }
     }
@@ -229,6 +247,7 @@ try {
     try { $have = @((Invoke-RestMethod -Uri 'http://127.0.0.1:11434/api/tags' -TimeoutSec 5).models | ForEach-Object { $_.name }) } catch { }
     if ($have -notcontains $model.Name) {
       Write-Host "Downloading $($model.Name)$(if ($model.Size) { " ($($model.Size))" }). This is the slow part; it only happens once."
+      # ollama draws its own progress bar
       & $ollama pull $model.Name
       if ($LASTEXITCODE -ne 0) { throw "couldn't download $($model.Name)" }
     } else { Write-Host "$($model.Name) is already downloaded." -ForegroundColor Green }
