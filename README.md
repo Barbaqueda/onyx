@@ -39,11 +39,19 @@ Once things are tidy, Onyx stays useful as **a better file explorer**: every fil
 > Onyx is proprietary software. The code is public so you can see it, but building, running, copying or redistributing it needs written permission. See [License](#-license).
 
 > [!TIP]
-> No installer, no Node.js, no admin rights. One double-click builds the app.
+> No installer and no admin rights.
 
-1. **Download** this repo: **Code → Download ZIP**, then unzip it anywhere.
+**Ready to run**
+
+1. Download **`Onyx-<version>-win-x64.zip`** from the [latest release](../../releases/latest).
+2. Unzip it anywhere and open **`Onyx.exe`**.
+3. Windows may say it protected your PC, because Onyx isn't signed with a paid certificate yet. Click **More info → Run anyway**.
+
+**Or build it yourself** (always the newest code, and it can set up AI that runs on your PC)
+
+1. **Code → Download ZIP**, then unzip it anywhere.
 2. **Double-click `Build Onyx.bat`.**
-3. Onyx opens. It also lives at `Downloads\onyx\Onyx.exe`, with shortcuts on your desktop and in the Start menu.
+3. Onyx opens. It lives at `Downloads\onyx\Onyx.exe`, with shortcuts on your desktop and in the Start menu.
 
 <details>
 <summary><b>What does the build script actually do?</b></summary>

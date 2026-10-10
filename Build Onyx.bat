@@ -8,5 +8,5 @@ if errorlevel 1 (
   exit /b 1
 )
 echo.
-echo Onyx was built and launched. You can close this window.
+echo Done. You can close this window.
 timeout /t 8 >nul

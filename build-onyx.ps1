@@ -4,7 +4,8 @@
 #   -LocalAI ask   ask the first time (default), then remember the answer
 #   -LocalAI yes   set it up (or repair it) and switch Onyx to it
 #   -LocalAI no    skip it
-param([ValidateSet('ask', 'yes', 'no')][string]$LocalAI = 'ask')
+#   -Package       also make a ready-to-run zip for a GitHub release (in Downloads), then stop
+param([ValidateSet('ask', 'yes', 'no')][string]$LocalAI = 'ask', [switch]$Package)
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
@@ -97,6 +98,24 @@ try {
   if ($LASTEXITCODE -ne 0) { throw "rcedit exit code $LASTEXITCODE" }
   Write-Host 'Icon set.' -ForegroundColor Green
 } catch { Write-Host "Couldn't set the icon ($($_.Exception.Message)). Onyx still works, it just has the Electron icon." -ForegroundColor Yellow }
+
+# 5b. Release zip: the built app in one folder, ready to unzip and run
+if ($Package) {
+  $ver = (Get-Content (Join-Path $Src 'package.json') -Raw | ConvertFrom-Json).version
+  $ZipOut = Join-Path $env:USERPROFILE "Downloads\Onyx-$ver-win-x64.zip"
+  $Stage = Join-Path $Cache 'package\Onyx'
+  Step "Packaging Onyx $ver"
+  if (Test-Path (Split-Path $Stage)) { Remove-Item (Split-Path $Stage) -Recurse -Force }
+  New-Item -ItemType Directory -Force -Path $Stage | Out-Null
+  Copy-Item (Join-Path $Dest '*') $Stage -Recurse -Force
+  Remove-Item (Join-Path $Stage 'resources\app\ai-key.txt'), (Join-Path $Stage 'resources\app\local-ai.json') -Force -ErrorAction SilentlyContinue
+  if (Test-Path $ZipOut) { Remove-Item $ZipOut -Force }
+  Write-Host 'Compressing (takes a minute or two)...'
+  Compress-Archive -Path $Stage -DestinationPath $ZipOut -CompressionLevel Optimal
+  Remove-Item (Split-Path $Stage) -Recurse -Force
+  Write-Host "Release zip ready: $ZipOut ($([math]::Round((Get-Item $ZipOut).Length / 1MB)) MB)" -ForegroundColor Green
+  return
+}
 
 # 6. Shortcuts
 Step 'Creating shortcuts'
