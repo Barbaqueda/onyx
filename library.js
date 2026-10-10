@@ -627,7 +627,8 @@
       h += thumbHTML(f, 320, 'ld-preview');
       h += '<div class="ld-name" title="' + esc(f.name) + '">' + esc(f.name) + '</div>';
       h += '<div class="ld-actions"><button class="btn small mod-cta" data-lib="open">' + icon('external-link') + 'Open</button><button class="btn small" data-lib="reveal">' + icon('folder-open') + 'Show in folder</button><button class="clickable-icon" data-lib="copy" aria-label="Copy path" data-tip="Copy path">' + icon('copy') + '</button></div>';
-      h += '<div class="ld-section"><div class="ld-title">Tags</div><div class="ld-chips">' + (tags.length ? tags.map(t => chip(t, { auto: auto.has(t), x: true, tip: true })).join('') : '<span class="muted small">No tags yet</span>') + '</div>' + tagInput() + '</div>';
+      h += '<div class="ld-section"><div class="ld-title">Tags</div><div class="ld-chips">' + (tags.length ? tags.map(t => chip(t, { auto: auto.has(t), x: true, tip: true })).join('') : '<span class="muted small">No tags yet</span>') + '</div>' + tagInput() +
+        '<div class="ld-tag-actions"><a class="mod-link" data-lib="tag-ai-sel" tabindex="0">' + icon('sparkles', 'xs') + 'Suggest with AI</a>' + (auto.size ? '<a class="mod-link" data-lib="retag-ai-sel" tabindex="0" data-tip="Replace the automatic tags with fresh ones">' + icon('refresh-cw', 'xs') + 'Re-tag</a>' : '') + '</div></div>';
       h += '<div class="ld-section ld-props">' +
         prop('folder', 'Folder', '<a class="mod-link" data-lib="go" data-p="' + esc(E.dirname(f.path)) + '" data-sel="' + esc(f.path) + '">' + esc(E.dirname(f.path) || V().vaultName) + '</a>') +
         prop('file', 'Kind', esc(E.typeFolder(f.extension).replace('/', ' · ')) + (f.extension ? ' <span class="muted">.' + esc(f.extension) + '</span>' : '')) +
@@ -643,7 +644,7 @@
       h += '<div class="ld-multi">' + files.slice(0, 5).map(x => '<span>' + icon(window.fileIconName(x.extension)) + '</span>').join('') + '</div>';
       h += '<div class="ld-name">' + plural(files.length, 'file') + ' selected</div><div class="muted" style="text-align:center">' + C.fmt(files.reduce((a, x) => a + x.size, 0)) + '</div>';
       h += '<div class="ld-section"><div class="ld-title">Tags</div><div class="ld-chips">' + (list.length ? list.map(([t, n]) => chip(t, { count: n === files.length ? '' : n + '/' + files.length, x: true, cls: n === files.length ? '' : 'is-partial' })).join('') : '<span class="muted small">None of these have tags</span>') + '</div>' + tagInput() + '</div>';
-      h += '<div class="ld-section"><button class="btn small block" data-lib="tag-ai-sel">' + icon('sparkles') + 'Suggest tags with AI</button><button class="btn small block" data-lib="tag-rules-sel">' + icon('zap') + 'Suggest tags from names</button><button class="btn small block" data-lib="copy">' + icon('copy') + 'Copy paths</button></div>';
+      h += '<div class="ld-section"><button class="btn small block" data-lib="tag-ai-sel">' + icon('sparkles') + 'Suggest tags with AI</button><button class="btn small block" data-lib="retag-ai-sel">' + icon('refresh-cw') + 'Re-tag with AI</button><button class="btn small block" data-lib="tag-rules-sel">' + icon('zap') + 'Suggest tags from names</button><button class="btn small block" data-lib="copy">' + icon('copy') + 'Copy paths</button></div>';
     }
     el.innerHTML = h;
     if (keepFocus) { const n = el.querySelector('#libTagInput'); if (n) n.focus(); }
@@ -874,7 +875,8 @@
     else if (name === 'open') { if (L.focus || L.sel.size) openFile(L.focus || [...L.sel][0]); }
     else if (name === 'reveal') { if (L.focus || L.sel.size) reveal(L.focus || [...L.sel][0]); }
     else if (name === 'copy') { C.api.copyText([...L.sel].map(p => V().rootPath ? V().rootPath.replace(/[\\/]+$/, '') + (V().rootPath.includes('\\') ? '\\' + p.replace(/\//g, '\\') : '/' + p) : p).join('\n')); C.notice('Copied ' + (L.sel.size === 1 ? 'path' : plural(L.sel.size, 'path')), 'success', 1800); }
-    else if (name === 'tag-ai-sel') autoTag('ai', { paths: [...L.sel] });
+    else if (name === 'tag-ai-sel') autoTag('ai', { paths: selFiles().map(f => f.path) });
+    else if (name === 'retag-ai-sel') autoTag('ai', { paths: selFiles().map(f => f.path), retag: true });
     else if (name === 'tag-rules-sel') autoTag('rules', { paths: [...L.sel] });
     else if (name === 'cancel-run') { C.api.tagsCancel(); C.notice('Stopping after the current batch…', '', 2500); }
   }
@@ -931,6 +933,7 @@
     for (const f of files) for (const t of tagsOf(f.path)) present.set(t, (present.get(t) || 0) + 1);
     for (const t of [...present.keys()].slice(0, 6)) items.push({ label: 'Remove #' + t, icon: 'x', action: () => removeTag(files.map(f => f.path), t) });
     items.push({ label: 'Suggest tags with AI', icon: 'sparkles', action: () => autoTag('ai', { paths: files.map(f => f.path) }) });
+    items.push({ label: 'Re-tag with AI', icon: 'refresh-cw', sub: 'replaces automatic tags', action: () => autoTag('ai', { paths: files.map(f => f.path), retag: true }) });
     items.push({ label: 'Suggest tags from names', icon: 'zap', action: () => autoTag('rules', { paths: files.map(f => f.path) }) });
     if ([...present.keys()].length) items.push({ label: 'Remove automatic tags', icon: 'eraser' in window.ICONS ? 'eraser' : 'rotate-ccw', action: () => clearAuto(files.map(f => f.path)) });
     items.push('sep');
@@ -965,6 +968,7 @@
       { label: 'Every file inside, in one list', icon: 'files', action: () => { go(d); setPref('browse', 'flat'); } },
       { label: 'Tag all ' + plural(n, 'file') + ' inside…', icon: 'tag', action: () => tagEditor(filesInside(d)) },
       { label: 'Suggest tags for these with AI', icon: 'sparkles', action: () => autoTag('ai', { paths: filesInside(d) }) },
+      { label: 'Re-tag these with AI', icon: 'refresh-cw', sub: 'replaces automatic tags', action: () => autoTag('ai', { paths: filesInside(d), retag: true }) },
     ];
   }
   async function clearAuto(paths) {
@@ -1028,7 +1032,7 @@
     L.run = { mode, batch: 1, of: 0 };
     renderProgress(); renderTagsPanel();
     let r;
-    try { r = await C.api.tagsAuto({ mode, paths: opts.paths || null, scope: opts.scope || 'untagged' }); } catch (e) { r = { error: e.message }; }
+    try { r = await C.api.tagsAuto({ mode, paths: opts.paths || null, scope: opts.scope || 'untagged', retag: !!opts.retag }); } catch (e) { r = { error: e.message }; }
     L.run = null;
     if (r.error) {
       renderProgress(); renderTagsPanel();
@@ -1074,12 +1078,21 @@
       { label: 'Add to current search', icon: 'filter', action: () => toggleTagQuery(t, true) },
       { label: 'Exclude from search', icon: 'eye-off', action: () => setQuery((L.query + ' -#' + t).trim()) },
       'sep',
+      { label: 'Remove where Onyx added it', icon: 'eraser' in window.ICONS ? 'eraser' : 'rotate-ccw', sub: autoCount(t) + ' files', action: () => removeAutoTagEverywhere(t) },
       { label: 'Rename…', icon: 'pencil', action: () => renameTagPrompt(t) },
       { label: 'Change color…', icon: 'palette', action: () => colorPicker(t) },
       { label: 'Tag the selected files', icon: 'tag', action: () => L.sel.size ? addTags([...L.sel], [t]) : C.notice('Select files in the Library first', 'warn', 2500) },
       'sep',
       { label: 'Delete tag…', icon: 'trash', danger: true, action: () => deleteTagConfirm(t) },
     ];
+  }
+  function autoCount(t) { return Object.values(tagState().files).filter(e => (e.a || []).includes(t)).length; }
+  async function removeAutoTagEverywhere(t) {
+    const n = autoCount(t);
+    if (!n) { C.notice('Onyx didn’t add <b>#' + esc(t) + '</b> anywhere. It’s only on files you tagged yourself.', '', 3500); return; }
+    V().tags = await C.api.tagsRemoveAuto(t);
+    changed();
+    C.notice('Removed <b>#' + esc(t) + '</b> from ' + plural(n, 'file') + ' where Onyx added it. Tags you added yourself stay, and Onyx won’t add it back there.', 'success', 5000);
   }
   function renameTagPrompt(t) {
     C.textPrompt({

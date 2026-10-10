@@ -188,6 +188,7 @@ function syncTags() {
   if (!tagDb) loadTagDb();
   const complete = !scan.skipped.some(x => /^Stopped after/.test(x));
   TG.reconcile(tagDb, scan.files, { complete });
+  TG.guardCleanup(tagDb, scan.files);          // e.g. #work on a synth preset, from older versions
   scan.autoTagged = 0;
   if (autoTagMode() === 'rules') {
     const map = Object.fromEntries(TG.autoTags(scan.files, scan.dirs));
@@ -623,7 +624,8 @@ ipcMain.handle('tags-clear-auto', async (e, paths) => { if (tagDb) { TG.clearAut
 
 let tagRun = null;
 ipcMain.handle('tags-cancel', async () => { if (tagRun) tagRun.cancelled = true; });
-ipcMain.handle('tags-auto', async (event, { mode, paths, scope }) => {
+ipcMain.handle('tags-remove-auto', async (e, name) => { if (tagDb) { TG.removeAutoTag(tagDb, name); saveTagDb(); } return tagView(); });
+ipcMain.handle('tags-auto', async (event, { mode, paths, scope, retag }) => {
   if (!tagDb) return { error: 'Open a folder first' };
   let files = scan.files.filter(f => !E.untouchableReason(f) || /\.(crdownload|part|partial|download)$/i.test(f.name));
   if (scan.browse) {
@@ -635,6 +637,8 @@ ipcMain.handle('tags-auto', async (event, { mode, paths, scope }) => {
     }
     paths = files.map(f => f.path);
   }
+  // re-tag: forget the automatic tags these files have, then tag them again (tags you added stay)
+  if (retag && paths && paths.length) TG.clearAuto(tagDb, cleanPaths(paths), { retag: true });
   const view = tagView();
   if (paths && paths.length) { const set = new Set(cleanPaths(paths).map(p => p.toLowerCase())); files = files.filter(f => set.has(f.path.toLowerCase())); }
   else if (scope === 'untagged') files = files.filter(f => !view.files[f.path]);
@@ -657,6 +661,7 @@ ipcMain.handle('tags-auto', async (event, { mode, paths, scope }) => {
   for (const v of Object.values(view.files)) for (const t of v.t) counts.set(t, (counts.get(t) || 0) + 1);
   const vocab = [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([t]) => t).slice(0, 80);
   const batches = TG.aiTagBatches(files, vocab, { batchSize: 120 });
+  const byPath = new Map(files.map(f => [f.path.toLowerCase(), f]));
   const run = tagRun = { cancelled: false };
   const used = new Set();
   let added = 0, touched = 0, failed = 0, model = '', lastErr = null;
@@ -673,7 +678,11 @@ ipcMain.handle('tags-auto', async (event, { mode, paths, scope }) => {
     }
     if (!parsed) { if (i === 0) { tagRun = null; return { error: (lastErr && lastErr.message) || 'AI tagging failed' }; } failed++; continue; }
     if (tagDb !== db || scan.root !== root) { switched = true; break; }
-    for (const id of b.ids) if (!Object.prototype.hasOwnProperty.call(parsed, id)) parsed[id] = [];
+    for (const id of b.ids) {
+      const f = byPath.get(id.toLowerCase());
+      const tags = Object.prototype.hasOwnProperty.call(parsed, id) ? parsed[id] : [];
+      parsed[id] = f ? TG.cleanSuggested(f, tags) : tags;      // no #work on a synth preset; "attack-snare" becomes snare
+    }
     const r = TG.applyAuto(db, parsed, 'ai', scan.browse ? files : scan.files);
     added += r.added; touched += r.files;
     for (const list of Object.values(parsed)) for (const t of list) used.add(t);
@@ -718,9 +727,14 @@ ipcMain.handle('list-dir', async (e, rel) => {
   if (!scan.root || scan.demo) return { error: 'Nothing to list' };
   const r = await listDirectory(rel);
   // tag new files from their names as you browse (offline, instant)
-  if (!r.error && tagDb && autoTagMode() === 'rules' && r.files.length) {
-    const map = Object.fromEntries(TG.autoTags(r.files, r.path ? [{ path: r.path }] : []));
-    if (TG.applyAuto(tagDb, map, 'rules', r.files).added) saveTagDb();
+  if (!r.error && tagDb && r.files.length) {
+    let changed = TG.guardCleanup(tagDb, r.files) > 0;
+    if (autoTagMode() === 'rules') {
+      const map = Object.fromEntries(TG.autoTags(r.files, r.path ? [{ path: r.path }] : []));
+      changed = TG.syncRules(tagDb, map, new Set(r.files.map(f => f.path.toLowerCase()))) > 0 || changed;
+      changed = TG.applyAuto(tagDb, map, 'rules', r.files).added > 0 || changed;
+    }
+    if (changed) saveTagDb();
   }
   r.tags = tagView();
   return r;

@@ -120,7 +120,8 @@
           if ((r.re && r.re.test(f.name)) || r.kw.some(k => E.hasKeyword(texts, k))) { for (const t of MEDIA_TAGS[r.folder] || []) add(f.path, t); break; }
         }
       }
-      if (E.CONTENT_GROUPS.has(group) || group === 'Images' && /scan/.test(texts[1])) {
+      if (group === 'Audio') { for (const t of audioTags(f)) add(f.path, t); }
+      if ((E.CONTENT_GROUPS.has(group) && (group !== 'Other' || !f.extension)) || group === 'Images' && /scan/.test(texts[1])) {
         for (const r of E.KEYWORD_RULES) if (r.kw.some(k => E.hasKeyword(texts, k))) for (const t of folderToTags(r.folder)) add(f.path, t);
         for (const y of yearsIn(f.name)) add(f.path, y);
       }
@@ -143,7 +144,8 @@
     if (opts.only) for (const p of [...out.keys()]) if (!opts.only.has(p)) out.delete(p);
     return out;
   }
-  const SERIES_SKIP = new Set(['Code', 'Fonts', 'Shortcuts', 'Torrents', 'Subtitles', 'Other']);
+  // sample packs are numbered (Snare 01, Snare 02): instrument tags describe them better than a series tag
+  const SERIES_SKIP = new Set(['Code', 'Fonts', 'Shortcuts', 'Torrents', 'Subtitles', 'Other', 'Audio']);
   function goodSeriesTag(t) {
     if (!t || t.length < 3 || t.length > 24) return false;
     if (/https?|www|\.com|cdn|akamai|^(img|dsc|vid|file|untitled|new|copy|image|photo|screenshot|document|scan)$/.test(t)) return false;
@@ -151,6 +153,54 @@
     if (letters.length < 3 || !/[aeiouy]/.test(letters)) return false;
     return t.split('-').every(w => w.length <= 14);
   }
+  // "Attack Snare 01.wav" -> sounds, percussion, snare; "Square Retro.fst" -> preset, synth, fl-studio
+  function audioTags(f) {
+    const a = E.audioInfo(f);
+    if (!a) return [];
+    const out = [];
+    if (a.kind === 'project') out.push('music-project');
+    else if (a.kind === 'preset') out.push('preset');
+    else if (a.kind === 'midi') out.push('midi');
+    else if (a.family || a.loop) out.push('sounds');
+    if (a.tag) out.push(a.tag);
+    if (a.instrument && a.instrument !== a.tag) out.push(a.instrument);
+    if (a.loop && a.kind === 'sample') out.push('loop');
+    if (a.app) out.push(a.app);
+    return out;
+  }
+
+  // Tags about paperwork and life admin only make sense on documents. A sound, preset, model or app
+  // never gets #work or #meeting unless its name literally says so.
+  const DOC_TAGS = new Set(('work meeting report proposal contract invoice finance tax tax-return bank-statement budget receipt payslip insurance ' +
+    'personal identity career school lecture assignment research travel medical health fitness recipe manual journal certificate homework exam ' +
+    'client office business presentation agenda minutes quarterly project-management hr legal').split(' '));
+  const DOC_GROUPS = new Set(['Documents', 'eBooks', 'Email', 'Calendar & Contacts']);
+  function guardTags(f, tags) {
+    const group = E.typeGroup(f.extension);
+    if (DOC_GROUPS.has(group) || (group === 'Other' && !f.extension)) return tags;
+    const name = ' ' + E.nameTexts(f.name).join(' ') + ' ';
+    return tags.filter(t => !DOC_TAGS.has(t.split('/')[0]) || t.split(/[-/]/).every(w => name.includes(' ' + w + ' ')));
+  }
+  // "attack-snare", "soft-snare" -> "snare" (+ "percussion"): reusable tags beat one-off ones
+  const INSTRUMENTS = (() => {
+    const m = new Map();
+    for (const fam of E.AUDIO_FAMILIES) for (const [w, t] of fam.words) if (w.length >= 3) m.set(w, [t, fam.tag]);
+    return m;
+  })();
+  function generalizeTags(f, tags) {
+    const group = E.typeGroup(f.extension);
+    const out = [];
+    for (const t of tags) {
+      const parts = t.split('-');
+      const inst = parts.length > 1 && group === 'Audio' ? parts.map(p => INSTRUMENTS.get(p)).find(Boolean) : null;
+      if (inst) { out.push(inst[0]); if (inst[1] !== inst[0]) out.push(inst[1]); }
+      else out.push(t);
+    }
+    if (group === 'Audio' && out.some(t => INSTRUMENTS.has(t) || [...INSTRUMENTS.values()].some(v => v[1] === t)) && !out.includes('sounds') && E.audioInfo(f).kind === 'sample') out.push('sounds');
+    return [...new Set(out)].slice(0, 5);
+  }
+  function cleanSuggested(f, tags) { return generalizeTags(f, guardTags(f, (tags || []).map(normTag).filter(Boolean))); }
+
   function singularLabel(label) {
     const w = String(label).split(' ');
     w[w.length - 1] = singular(w[w.length - 1]);
@@ -161,12 +211,19 @@
   const AI_TAG_SYSTEM = [
     'You tag files for a personal file manager so they are easy to find later.',
     'For each numbered file, choose 1 to 4 short tags describing what the file is FOR or ABOUT: its topic, project, purpose, place, event, person or status.',
+    'Each file comes with its type in brackets. Read the type first: the same word means different things for different types.',
     'Rules:',
-    '1. Never tag the file type or format (no "pdf", "image", "document", "video", "file"). Onyx shows types separately.',
+    '1. Never tag the bare file format (no "pdf", "image", "document", "video", "file"). Onyx shows types separately.',
     '2. Reuse tags from EXISTING TAGS whenever they fit, so the same idea always gets the same tag.',
     '3. Tags are lowercase singular nouns; use hyphens instead of spaces: "tax-return", "iceland-trip", "invoice".',
-    '4. Files that clearly belong together (a series, the same project) share a tag.',
-    '5. If the name tells you nothing, give an empty list. Do not invent details.',
+    '4. Prefer general, reusable tags: one broad tag plus at most two specific ones. "Attack Snare 01" and "Soft Snare 02" are both',
+    '   "snare" (specific), "percussion" (broad) and "sounds"; never one-off tags like "attack-snare".',
+    '5. Sounds, synth presets and music projects get music tags: the instrument (kick, snare, bass, pad, lead, vocals…), its family',
+    '   (percussion, synth, keys, fx…), "preset" or "music-project", the app if obvious (fl-studio, ableton, serum, vital), and a',
+    '   genre or mood only if the name says so. They never get office or life-admin tags like work, meeting, report, finance or school:',
+    '   a preset named "Square Retro" is a retro-sounding synth, not a team retrospective.',
+    '6. Files that clearly belong together (the same project, trip or client) share a tag.',
+    '7. If the name tells you nothing, give an empty list. Do not invent details.',
     'Reply with strict JSON only, no prose: {"tags": {"1": ["tag", "tag"], "2": []}}',
   ].join('\n');
 
@@ -184,7 +241,7 @@
         const v = [...new Set([...(vocab || []), ...(used || [])])].slice(0, 120);
         return ['EXISTING TAGS:', v.length ? v.join(', ') : '(none yet)',
           '\nFILES (' + batch.length + '):',
-          batch.map((f, i) => (i + 1) + '. ' + f.path + '  (' + E.fmtSize(f.size) + ', ' + new Date(f.lastModified).toISOString().slice(0, 10) + ')').join('\n')].join('\n');
+          batch.map((f, i) => (i + 1) + '. ' + f.path + '  [' + E.kindLabel(f.extension) + '] (' + E.fmtSize(f.size) + ', ' + new Date(f.lastModified).toISOString().slice(0, 10) + ')').join('\n')].join('\n');
       },
     }));
   }
@@ -424,10 +481,11 @@
    * earlier but no longer suggests is removed (only if you never touched it).
    * map: { path: [tags suggested now] } covering every scanned file.
    */
-  function syncRules(db, map) {
+  function syncRules(db, map, onlyKeys) {
     db = cleanDb(db);
     let removed = 0;
     for (const [k, e] of Object.entries(db.files)) {
+      if (onlyKeys && !onlyKeys.has(k.toLowerCase())) continue;
       if (!e.r && e.a && e.a.length && !e.ai) e.r = e.a.slice();     // entries from before rules were tracked
       if (!e.r || !e.r.length) continue;
       const now = new Set((own(map, k) ? map[k] : []).map(normTag));
@@ -508,7 +566,8 @@
     }
     return { added, files: touched };
   }
-  function clearAuto(db, paths) {
+  function clearAuto(db, paths, opts) {
+    opts = opts || {};
     db = cleanDb(db);
     const idx = index(db);
     let n = 0;
@@ -519,9 +578,43 @@
       delete e.r;
       n += e.a.length;
       e.t = e.t.filter(t => !e.a.includes(t));
-      for (const t of e.a) if (!e.x.includes(t)) e.x.push(t);
+      if (!opts.retag) for (const t of e.a) if (!e.x.includes(t)) e.x.push(t);   // a re-tag starts fresh instead of blocking
       e.a = [];
       delete e.ai;
+    }
+    return n;
+  }
+  // remove a tag only where Onyx or AI added it, and keep it from coming back there
+  function removeAutoTag(db, name) {
+    db = cleanDb(db);
+    name = normTag(name);
+    let n = 0;
+    for (const [k, e] of Object.entries(db.files)) {
+      tidy(e);
+      if (!e.a.includes(name)) continue;
+      e.t = e.t.filter(t => t !== name); e.a = e.a.filter(t => t !== name);
+      if (!e.x.includes(name)) e.x.push(name);
+      n++;
+      if (isBare(e)) delete db.files[k];
+    }
+    return n;
+  }
+  // drop automatic tags that break the type guard (e.g. #work on a synth preset tagged by an older version)
+  function guardCleanup(db, files) {
+    db = cleanDb(db);
+    const idx = index(db);
+    let n = 0;
+    for (const f of files) {
+      const k = idx.get(f.path.toLowerCase());
+      if (k == null) continue;
+      const e = tidy(db.files[k]);
+      if (!e.a.length) continue;
+      const okAuto = new Set(guardTags(f, e.a));
+      const bad = e.a.filter(t => !okAuto.has(t));
+      if (!bad.length) continue;
+      e.t = e.t.filter(t => !bad.includes(t)); e.a = e.a.filter(t => !bad.includes(t)); if (e.r) e.r = e.r.filter(t => !bad.includes(t));
+      n += bad.length;
+      if (isBare(e)) delete db.files[k];
     }
     return n;
   }
@@ -600,6 +693,6 @@
   return {
     normTag, tagLabel, tagFolder, hashColor, autoTags, aiTagBatches, parseAiTags, AI_TAG_SYSTEM,
     parseQuery, isEmptyQuery, matchFile, duplicateSet, tokenize, KINDS, tagMatches,
-    emptyDb, cleanDb, reconcile, applyMoves, edit, applyAuto, clearAuto, renameTag, deleteTag, view, viewAll, needsAuto, aiOrder, primaryTag, syncRules,
+    emptyDb, cleanDb, reconcile, applyMoves, edit, applyAuto, clearAuto, renameTag, deleteTag, view, viewAll, needsAuto, aiOrder, primaryTag, syncRules, removeAutoTag, guardCleanup, guardTags, generalizeTags, cleanSuggested, audioTags,
   };
 });

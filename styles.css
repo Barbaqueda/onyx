@@ -856,3 +856,5 @@ body.dragging-files .tp-tag { outline: 1px dashed color-mix(in srgb, var(--tc) 4
 .pl-bar span { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
 .pl-bar span.full { background: var(--red); }
 .lib-empty .spinner { width: 20px; height: 20px; }
+.ld-tag-actions { display: flex; gap: 14px; margin-top: 8px; font-size: 12px; }
+.ld-tag-actions .mod-link { display: inline-flex; align-items: center; gap: 4px; }

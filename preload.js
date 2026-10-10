@@ -32,6 +32,7 @@ contextBridge.exposeInMainWorld('onyx', {
   tagsClearAuto: (paths) => ipcRenderer.invoke('tags-clear-auto', paths),
   tagsAuto: (opts) => ipcRenderer.invoke('tags-auto', opts),
   tagsCancel: () => ipcRenderer.invoke('tags-cancel'),
+  tagsRemoveAuto: (name) => ipcRenderer.invoke('tags-remove-auto', name),
   onTagProgress: (cb) => ipcRenderer.on('tag-progress', (e, p) => cb(p)),
   openFile: (rel) => ipcRenderer.invoke('open-file', rel),
   thumb: (rel, size) => ipcRenderer.invoke('file-thumb', { rel, size }),

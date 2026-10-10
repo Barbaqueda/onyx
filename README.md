@@ -103,7 +103,9 @@ The **Library** is a file explorer that also understands tags. Browse folder by 
 - **With AI.** One click and AI reads the names (never the contents) and adds 1 to 4 tags about topic, project or purpose, like `#iceland-trip` or `#project-atlas`. It reuses your existing tags so the same idea always gets the same tag.
 - **By hand.** Select files and press <kbd>#</kbd>, type in the details panel, or drag files onto a tag in the Tags panel.
 
-Tags you remove never come back, automatic tags are shown dashed so you can tell them apart, and nested tags like `school/math` just work.
+Tags fit the file type: a sample called *Attack Snare 01.wav* gets `#sounds #percussion #snare`, an FL Studio preset gets `#preset #synth #fl-studio`, and office tags like `#work` never land on sounds, presets, models or apps. Over-specific AI tags are folded into general ones (`attack-snare` → `snare`).
+
+Tags you remove never come back, automatic tags are shown dashed so you can tell them apart, and nested tags like `school/math` just work. If a file got the wrong tags, **Re-tag** replaces its automatic tags with fresh ones; if a tag landed in the wrong places, right-click it and choose **Remove where Onyx added it**.
 
 </td>
 <td width="50%" valign="top">

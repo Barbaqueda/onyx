@@ -132,6 +132,43 @@ db = { v: 1, files: { 'y.png': { t: ['httpssteam', 'keep'], a: ['httpssteam'], x
 TG.syncRules(db, { 'y.png': [] });
 eq(db.files['y.png'].t, ['keep'], 'old junk auto tags cleaned on upgrade');
 
+// ---- music production files (FL Studio presets were tagged #work #meeting because of "retro")
+const M = p => ({ path: p, name: p.split('/').pop(), extension: (p.match(/\.([^./]+)$/) || [, ''])[1].toLowerCase(), size: 1000, lastModified: now });
+const E3 = require(path.join(fs.existsSync(APP) ? APP : path.join(__dirname, '..'), 'engine.js'));
+const mus = ['Square Retro.fst', 'Attack Snare 01.wav', 'Attack Snare 02.wav', 'Soft Snare 01.wav', 'beat.flp', 'mobile beat.flm', 'Warm Pad.spectra', 'Drum Loop 120bpm.wav'].map(M);
+const mt = TG.autoTags(mus, []);
+eq(mt.get('Square Retro.fst'), ['preset', 'synth', 'fl-studio'], 'a synth preset is a synth preset, not a meeting');
+eq(mt.get('Attack Snare 01.wav'), ['sounds', 'percussion', 'snare'], 'samples: broad + family + instrument, no one-off series tag');
+eq(mt.get('Soft Snare 01.wav'), ['sounds', 'percussion', 'snare'], 'same instrument, same tags');
+eq(mt.get('beat.flp'), ['music-project', 'fl-studio']);
+ok(mt.get('Drum Loop 120bpm.wav').includes('loop'));
+eq(E3.ruleFolder(M('Square Retro.fst')).folder, 'Audio/Presets/Synths', 'organizer files presets by sound');
+eq(E3.ruleFolder(M('Attack Snare 01.wav')).folder, 'Audio/Samples/Drums', 'organizer files samples by instrument');
+eq(E3.ruleFolder(M('beat.flp')).folder, 'Audio/Projects');
+eq(E3.ruleFolder(M('retro.xyz')).folder, 'Other', 'unknown types never get document keyword folders');
+eq(TG.cleanSuggested(M('Square Retro.fst'), ['work', 'meeting', 'synth']), ['synth'], 'AI office tags dropped on presets');
+eq(TG.cleanSuggested(M('Attack Snare 01.wav'), ['attack-snare']), ['snare', 'percussion', 'sounds'], 'AI one-off tags generalized');
+eq(TG.cleanSuggested(M('q4 report.pdf'), ['work', 'report']), ['work', 'report'], 'documents keep office tags');
+ok(TG.aiTagBatches([M('Square Retro.fst')], [])[0].user([]).includes('[FL Studio preset]'), 'AI sees the file type');
+// cleanup of tags made by older versions, re-tag, remove where added
+db = TG.emptyDb();
+TG.applyAuto(db, { 'Square Retro.fst': ['work', 'meeting'] }, 'rules');
+TG.edit(db, ['Square Retro.fst'], ['my-fav'], []);
+TG.guardCleanup(db, [M('Square Retro.fst')]);
+eq(db.files['Square Retro.fst'].t, ['my-fav'], 'old #work/#meeting cleaned, your tag kept');
+db = TG.emptyDb();
+TG.applyAuto(db, { 'a.wav': ['snare', 'weird'] }, 'ai');
+TG.clearAuto(db, ['a.wav'], { retag: true });
+TG.applyAuto(db, { 'a.wav': ['snare'] }, 'ai');
+eq(db.files['a.wav'].t, ['snare'], 're-tag replaces automatic tags and lets good ones back');
+db = TG.emptyDb();
+TG.applyAuto(db, { 'a.wav': ['work'], 'b.wav': ['work'] }, 'ai');
+TG.edit(db, ['c.docx'], ['work'], []);
+TG.removeAutoTag(db, 'work');
+ok(!(db.files['a.wav'] || { t: [] }).t.includes('work') && db.files['c.docx'].t.includes('work'), 'remove-where-added keeps your own uses');
+TG.applyAuto(db, { 'b.wav': ['work'] }, 'ai');
+ok(!db.files['b.wav'] || !db.files['b.wav'].t.includes('work'), 'and it does not come back there');
+
 // ---- main-process integration
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'onyx-tags-'));
 const ud = path.join(tmp, 'ud'), root = path.join(tmp, 'Downloads');

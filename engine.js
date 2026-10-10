@@ -52,7 +52,9 @@
     ['Images/Vector', 'svg eps'],
     ['Design', 'psd ai xd fig sketch indd afdesign afphoto kra xcf clip procreate'],
     ['Videos', 'mp4 mov avi mkv webm wmv flv m4v mpg mpeg 3gp mts'],
-    ['Audio', 'mp3 wav flac aac ogg m4a wma opus aiff aif mid midi'],
+    ['Audio', 'mp3 wav flac aac ogg m4a wma opus aiff aif mid midi rx2 rex'],
+    ['Audio/Projects', 'flp flm als alp logicx ptx aup3 rpp cpr band song sesx xrns npr'],
+    ['Audio/Presets', 'fst fsc fxp fxb nmsv vital vitalbank h2p spectra sfz sf2 nki nkm nkx nksn ksd adg adv aupreset fxpreset patch'],
     ['3D Models', 'obj fbx stl blend gltf glb dae 3ds max ma mb c4d usd usdz usda ply 3mf mtl'],
     ['Code', 'js mjs cjs ts tsx jsx py java go rs cpp cc c h hpp cs rb php swift kt lua sh bat cmd ps1 r scala dart sql ipynb gd'],
     ['Code/Web', 'html htm css scss sass less vue svelte'],
@@ -146,15 +148,68 @@
         if ((r.re && r.re.test(file.name)) || r.kw.some(k => hasKeyword(texts, k))) return r.folder;
       }
     }
+    if (group === 'Audio') return audioFolder(file);
     // Spreadsheets/presentations are content too
-    if (CONTENT_GROUPS.has(group) || group === 'Images' && /scan/.test(texts[1])) {
+    if ((CONTENT_GROUPS.has(group) && (group !== 'Other' || !file.extension)) || group === 'Images' && /scan/.test(texts[1])) {
       for (const r of KEYWORD_RULES) if (r.kw.some(k => hasKeyword(texts, k))) return r.folder;
     }
     return null;
   }
 
+  // ---------------------------------------------------------------------------
+  // Music production: samples by instrument, presets and projects by app
+  // ---------------------------------------------------------------------------
+  const AUDIO_FAMILIES = [
+    { folder: 'Drums', tag: 'percussion', words: [['kick', 'kick'], ['kicks', 'kick'], ['bd', 'kick'], ['snare', 'snare'], ['snares', 'snare'], ['snr', 'snare'], ['clap', 'clap'], ['claps', 'clap'],
+      ['hat', 'hi-hat'], ['hats', 'hi-hat'], ['hihat', 'hi-hat'], ['hihats', 'hi-hat'], ['hh', 'hi-hat'], ['oh', 'hi-hat'], ['ch', 'hi-hat'], ['cymbal', 'cymbal'], ['crash', 'cymbal'], ['ride', 'cymbal'],
+      ['tom', 'tom'], ['toms', 'tom'], ['perc', 'percussion'], ['percs', 'percussion'], ['percussion', 'percussion'], ['rim', 'rim'], ['rimshot', 'rim'], ['shaker', 'shaker'], ['snap', 'snap'], ['snaps', 'snap'],
+      ['808', '808'], ['909', 'drum-machine'], ['drum', 'drums'], ['drums', 'drums'], ['break', 'breakbeat'], ['breaks', 'breakbeat'], ['fill', 'drum-fill'], ['conga', 'percussion'], ['bongo', 'percussion'], ['cowbell', 'percussion'], ['tambourine', 'percussion']] },
+    { folder: 'Bass', tag: 'bass', words: [['bass', 'bass'], ['sub', 'sub-bass'], ['reese', 'bass'], ['bassline', 'bass']] },
+    { folder: 'Synths', tag: 'synth', words: [['lead', 'lead'], ['leads', 'lead'], ['pad', 'pad'], ['pads', 'pad'], ['pluck', 'pluck'], ['plucks', 'pluck'], ['arp', 'arp'], ['synth', 'synth'], ['synths', 'synth'],
+      ['saw', 'synth'], ['square', 'synth'], ['supersaw', 'synth'], ['chord', 'chords'], ['chords', 'chords'], ['stab', 'stab'], ['stabs', 'stab'], ['retro', 'synth'], ['analog', 'synth'], ['seq', 'sequence']] },
+    { folder: 'Keys', tag: 'keys', words: [['piano', 'piano'], ['keys', 'keys'], ['rhodes', 'keys'], ['organ', 'organ'], ['epiano', 'keys'], ['bell', 'bells'], ['bells', 'bells']] },
+    { folder: 'Guitar', tag: 'guitar', words: [['guitar', 'guitar'], ['gtr', 'guitar']] },
+    { folder: 'Strings', tag: 'strings', words: [['strings', 'strings'], ['violin', 'strings'], ['cello', 'strings'], ['orchestral', 'orchestral']] },
+    { folder: 'Brass & Winds', tag: 'brass', words: [['brass', 'brass'], ['horn', 'brass'], ['horns', 'brass'], ['trumpet', 'brass'], ['sax', 'sax'], ['flute', 'flute']] },
+    { folder: 'Vocals', tag: 'vocals', words: [['vocal', 'vocals'], ['vocals', 'vocals'], ['vox', 'vocals'], ['acapella', 'vocals'], ['chop', 'vocal-chop'], ['chops', 'vocal-chop'], ['adlib', 'vocals'], ['adlibs', 'vocals']] },
+    { folder: 'FX', tag: 'fx', words: [['fx', 'fx'], ['sfx', 'fx'], ['riser', 'riser'], ['risers', 'riser'], ['impact', 'impact'], ['sweep', 'sweep'], ['whoosh', 'whoosh'], ['downlifter', 'fx'], ['uplifter', 'fx'], ['noise', 'fx'], ['transition', 'fx']] },
+    { folder: 'Textures', tag: 'texture', words: [['atmos', 'atmosphere'], ['atmosphere', 'atmosphere'], ['ambience', 'atmosphere'], ['ambient', 'atmosphere'], ['texture', 'texture'], ['drone', 'drone'], ['foley', 'foley']] },
+  ];
+  const APP_TAGS = { flp: 'fl-studio', flm: 'fl-studio', fst: 'fl-studio', fsc: 'fl-studio', als: 'ableton', alp: 'ableton', adg: 'ableton', adv: 'ableton', logicx: 'logic-pro', ptx: 'pro-tools',
+    vital: 'vital', vitalbank: 'vital', nki: 'kontakt', nkm: 'kontakt', nkx: 'kontakt', nmsv: 'massive', h2p: 'u-he', rpp: 'reaper', band: 'garageband', song: 'studio-one', sesx: 'audition', xrns: 'renoise', aup3: 'audacity', spectra: 'spectra' };
+  const APP_NAMES = { flp: 'FL Studio project', flm: 'FL Studio Mobile project', fst: 'FL Studio preset', fsc: 'FL Studio score', fxp: 'plugin preset', fxb: 'plugin preset bank', vital: 'Vital synth preset',
+    nki: 'Kontakt instrument', nmsv: 'Massive preset', h2p: 'u-he synth preset', spectra: 'synth preset', sfz: 'sampler instrument', sf2: 'SoundFont', als: 'Ableton Live project', alp: 'Ableton pack',
+    adg: 'Ableton device preset', logicx: 'Logic Pro project', ptx: 'Pro Tools session', rpp: 'Reaper project', mid: 'MIDI clip', midi: 'MIDI clip', rx2: 'REX loop' };
+  /** What a sound, preset or music project is: { kind, family, tag, instrument, loop, app } */
+  function audioInfo(file) {
+    const tf = typeFolder(file.extension);
+    if (tf.split('/')[0] !== 'Audio') return null;
+    const kind = tf === 'Audio/Projects' ? 'project' : tf === 'Audio/Presets' ? 'preset' : /^midi?$/.test(file.extension) ? 'midi' : 'sample';
+    const texts = nameTexts(file.name);
+    const words = new Set(texts.join(' ').split(' ').filter(Boolean));
+    let family = null, instrument = null;
+    for (const fam of AUDIO_FAMILIES) {
+      const hit = fam.words.find(([w]) => words.has(w));
+      if (hit) { family = fam; instrument = hit[1]; break; }
+    }
+    const loop = words.has('loop') || words.has('loops') || /\b\d{2,3}\s?bpm\b/i.test(file.name) || /(^|[^a-z])\d{2,3}bpm/i.test(file.name);
+    return { kind, family: family ? family.folder : null, tag: family ? family.tag : null, instrument, loop, app: APP_TAGS[file.extension] || null };
+  }
+  function audioFolder(file) {
+    const a = audioInfo(file);
+    if (!a) return null;
+    if (a.kind === 'project') return 'Audio/Projects';
+    if (a.kind === 'preset') return a.family ? 'Audio/Presets/' + a.family : 'Audio/Presets';
+    if (a.kind === 'midi') return 'Audio/MIDI';
+    if (a.family) return (a.loop ? 'Audio/Loops/' : 'Audio/Samples/') + a.family;
+    if (a.loop) return 'Audio/Loops';
+    return null;
+  }
+  function kindLabel(ext) { return APP_NAMES[ext] || typeFolder(ext).replace('/', ' ').toLowerCase().replace(/s$/, '').replace('3d model', '3D model'); }
+
   function ruleFolder(file) {
     const kw = keywordFolder(file);
+    if (kw && kw.startsWith('Audio/')) return { folder: kw, reason: (APP_NAMES[file.extension] || 'Sound') + (kw.includes('/', 7) ? ': ' + kw.split('/').pop().toLowerCase() : '') };
     if (kw) return { folder: kw, reason: 'Name suggests ' + kw.split('/').pop().toLowerCase() };
     const t = typeFolder(file.extension);
     return { folder: t, reason: file.extension ? '.' + file.extension + ' file' : 'No extension' };
@@ -756,6 +811,9 @@
     '   those are self-contained projects, apps, games or assets. A file can stay where it is: answer its current folder.',
     '3. Group by what the file is for (a project, a subject, finances, work, school, travel...) when the name gives a clue.',
     '   Use type folders (Images, Videos, Audio, Documents, 3D Models, Installers, Archives, Code) only when it does not.',
+    '   Read the file type first: words in a name mean different things for different types. A synth preset called "Square Retro"',
+    '   is a sound, not a work meeting. Sounds, presets and music projects go under Audio, e.g. Audio/Samples/Drums,',
+    '   Audio/Presets/Synths, Audio/Projects; never under Work, Finance or School.',
     '4. Files given as a SERIES belong together: send every file of a series to the same folder, named after the series',
     '   and nested in a sensible parent, e.g. "3D Models/Excavatorio".',
     '5. Clear Title Case names, plural for collections (Invoices, Screenshots). No vague names like Files, Stuff, Misc, Other, New Folder.',
@@ -810,7 +868,7 @@
 
     return batches.map(batch => {
       const ids = batch.map(f => f.path);
-      const lines = batch.map((f, i) => (i + 1) + '. ' + f.path + '  (' + fmtSize(f.size) + ', ' + new Date(f.lastModified).toISOString().slice(0, 10) + ')');
+      const lines = batch.map((f, i) => (i + 1) + '. ' + f.path + '  (' + kindLabel(f.extension) + ', ' + fmtSize(f.size) + ', ' + new Date(f.lastModified).toISOString().slice(0, 10) + ')');
       const sLines = [];
       for (const g of series.values()) {
         const memberIds = g.files.map(f => ids.indexOf(f.path) + 1).filter(n => n > 0);
@@ -854,6 +912,6 @@
     buildPlan, aiBatches, parseAiResponse, sanitizeFolder, seriesStem, detectSeries, ruleFolder,
     RULE_TYPES, CATEGORY_LIST, ruleMatches, globToRegex, joinPath, classifyDirs, nestedKeepReason,
     typeFolder, untouchableReason, buildContext, splitExt, dirname, basename, fmtSize, DEFAULTS,
-    typeGroup, titleCase, nameTexts, hasKeyword, keywordFolder, KEYWORD_RULES, MEDIA_RULES, CONTENT_GROUPS, MEDIA_GROUPS, TYPE_FOLDERS,
+    typeGroup, titleCase, nameTexts, hasKeyword, keywordFolder, audioInfo, audioFolder, kindLabel, AUDIO_FAMILIES, KEYWORD_RULES, MEDIA_RULES, CONTENT_GROUPS, MEDIA_GROUPS, TYPE_FOLDERS,
   };
 });
