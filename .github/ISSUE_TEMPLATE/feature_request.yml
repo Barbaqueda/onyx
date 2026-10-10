@@ -1,0 +1,22 @@
+name: Feature request
+description: Suggest an idea for Onyx
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Describe the situation. "When I open my Downloads folder, I can't..."
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like Onyx to do?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: How do you handle it today?
+      description: Another app, a workaround, or doing it by hand.

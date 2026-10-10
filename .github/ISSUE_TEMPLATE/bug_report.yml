@@ -1,0 +1,47 @@
+name: Bug report
+description: Something in Onyx doesn't work the way it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for reporting this. Please don't paste API keys or upload personal files.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open a folder with...
+        2. Click...
+        3. See...
+  - type: input
+    id: version
+    attributes:
+      label: Onyx version
+      description: Settings → About
+      placeholder: "2.8.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: windows
+    attributes:
+      label: Windows version
+      options: [Windows 11, Windows 10, Other]
+    validations:
+      required: true
+  - type: dropdown
+    id: ai
+    attributes:
+      label: AI provider (if it's about organizing or tagging)
+      options: [Not related to AI, On this PC (Ollama), free.ai, Pollinations, OpenAI-compatible, Anthropic, Off]
+  - type: textarea
+    id: screens
+    attributes:
+      label: Screenshots
+      description: Drag images here if something looks wrong.
