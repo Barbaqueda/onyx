@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' onyx-ext:; style-src 'self' 'unsafe-inline'; img-src 'self' data: onyx-file:; media-src onyx-file:; frame-src onyx-file:; connect-src 'self' onyx-file:">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Onyx</title>
 <link rel="icon" href="icon.png">
@@ -80,6 +80,12 @@
 <script src="workspace.js"></script>
 <script src="library.js"></script>
 <script src="ops.js"></script>
+<script src="extensions.js"></script>
+<script src="extensions/image-viewer.js"></script>
+<script src="extensions/pdf-viewer.js"></script>
+<script src="extensions/media-player.js"></script>
+<script src="extensions/text-viewer.js"></script>
+<script src="viewer.js"></script>
 <script src="renderer.js"></script>
 </body>
 </html>

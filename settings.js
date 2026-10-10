@@ -12,6 +12,7 @@
     { id: 'organizing', name: 'Organizing', icon: 'sparkles', desc: 'How Onyx groups loose files.' },
     { id: 'rules', name: 'My rules', icon: 'list-checks', desc: 'Your own rules always win over Onyx’s and the AI’s choices.' },
     { id: 'ai', name: 'AI provider', icon: 'cpu', desc: 'Used by the AI smart strategy. Only file names, sizes and dates are sent, never file contents.' },
+    { id: 'extensions', name: 'Extensions', icon: 'puzzle', desc: 'Extensions add things Onyx can do. The viewers that show images, PDFs, video, sound and text inside Onyx are extensions you can turn on and off.' },
     { id: 'hotkeys', name: 'Hotkeys', icon: 'keyboard', desc: 'Click a shortcut to change it. Press Esc to cancel, Backspace to remove.' },
     { id: 'advanced', name: 'Advanced', icon: 'code', desc: 'Custom CSS, backups of your settings, and resets.' },
     { id: 'about', name: 'About', icon: 'info', desc: '' },
@@ -46,6 +47,31 @@
     else markChanged(path);
   }
   const same = (x, y) => JSON.stringify(x) === JSON.stringify(y);
+
+  // ------------------------------------------------------------------ extensions
+  function extensionRows() {
+    const X = window.OnyxExtensions;
+    if (!X) return [];
+    const rows = [];
+    const card = e => {
+      const kinds = e.viewers.map(v => v.label).filter(Boolean).join(', ');
+      return esc(e.description || '') + (kinds ? '<div class="ext-meta">' + C.icon(e.icon && e.icon in window.ICONS ? e.icon : 'puzzle', 'xs') + 'Shows: ' + esc(kinds) + ' · v' + esc(e.version) + (e.author ? ' · ' + esc(e.author) : '') + '</div>' : '');
+    };
+    const builtins = X.list().filter(e => e.builtin);
+    for (const e of builtins) rows.push({ s: 'extensions', g: 'Built in', k: 'ui.extensions.' + e.id, name: e.name, desc: card(e), kw: 'extension plugin viewer ' + e.viewers.map(v => v.label).join(' '), c: () => ctl.toggle('ui.extensions.' + e.id) });
+    rows.push({ s: 'extensions', g: 'Community extensions', k: 'ui.extensions.community', name: 'Allow community extensions', desc: 'Extensions made by other people, installed in Onyx’s extensions folder (one folder each, with a <code>manifest.json</code>). <b>They run with the same access as Onyx, so they can read and change your files.</b> Only install extensions you trust.', kw: 'plugin third party install community', c: () => ctl.toggle('ui.extensions.community') });
+    rows.push({ s: 'extensions', g: 'Community extensions', k: 'x.extfolder', name: 'Extensions folder', desc: 'Put each extension in its own folder here, then reload. <code>EXTENSIONS.md</code> in Onyx’s source explains how to make one.', noReset: true, c: () => '<button class="btn" data-x="ext-folder">' + C.icon('folder-open') + 'Open folder</button><button class="btn" data-x="ext-reload">' + C.icon('refresh-cw') + 'Reload</button>' });
+    const allowed = !!C.UI().extensions.community;
+    const comm = X.community();
+    if (!comm.length) rows.push({ s: 'extensions', g: 'Community extensions', k: 'x.extnone', name: 'No community extensions installed', desc: '', noReset: true, c: () => '' });
+    for (const m of comm) {
+      const e = X.get(m.id);
+      rows.push({ s: 'extensions', g: 'Community extensions', k: 'ui.extensions.' + m.id, name: m.name, noReset: true, kw: 'extension plugin community',
+        desc: esc(m.description || '') + '<div class="ext-meta">' + C.icon('puzzle', 'xs') + 'v' + esc(m.version) + (m.author ? ' · ' + esc(m.author) : '') + ' · folder <code>' + esc(m.folder) + '</code>' + (e && e.viewers.length ? ' · shows ' + esc(e.viewers.map(v => v.label).join(', ')) : '') + (!allowed ? ' · <b>turn on community extensions first</b>' : '') + '</div>',
+        c: () => allowed ? ctl.toggle('ui.extensions.' + m.id) : '<button class="toggle" disabled aria-disabled="true"></button>' });
+    }
+    return rows;
+  }
 
   // ------------------------------------------------------------------ controls
   const ctl = {
@@ -108,7 +134,7 @@
       // graph
       { s: 'library', k: 'ui.library.autoTag', name: 'Tag new files automatically', desc: 'When a folder opens, Onyx tags new files from their names: #invoice, #screenshot, #2024, a shared tag for a series. Runs offline and instantly. Tags you remove never come back.', kw: 'auto tag automatic offline rules', c: () => ctl.seg('ui.library.autoTag', [['rules', 'From names'], ['off', 'Off']]) },
       { s: 'library', k: 'x.libai', name: 'Tag with AI', desc: 'AI reads file names (never contents) and adds 1 to 4 tags about topic, project or purpose. It reuses your existing tags. Uses the provider from AI provider.', kw: 'ai tag smart', noReset: true, c: () => '<button class="btn" data-action="lib-ai-untagged">' + C.icon('sparkles') + 'Tag untagged files</button><button class="btn" data-action="lib-clear-auto">' + C.icon('rotate-ccw') + 'Remove automatic tags</button>' },
-      { s: 'library', k: 'ui.library.dblClick', name: 'Double-click a file to', desc: 'Enter does the same; Shift+Enter does the other.', kw: 'open reveal double click', c: () => ctl.seg('ui.library.dblClick', [['open', 'Open it'], ['reveal', 'Show it in its folder']]) },
+      { s: 'library', k: 'ui.library.dblClick', name: 'Double-click a file to', desc: '<b>Preview</b> shows images, PDFs, video, sound and text inside Onyx (whatever your viewer extensions can show) and opens everything else in its app. Enter does the same as double-click, and Space always previews.', kw: 'open reveal double click preview viewer', c: () => ctl.seg('ui.library.dblClick', [['preview', 'Preview it'], ['open', 'Open it in its app'], ['reveal', 'Show it in its folder']]) },
       { s: 'library', k: 'ui.library.thumbs', name: 'Show thumbnails', desc: 'Previews of images, videos and documents in grid view and the details panel, made by Windows.', kw: 'preview thumbnail image', c: () => ctl.toggle('ui.library.thumbs') },
       { s: 'library', k: 'ui.library.treeTags', name: 'Show tags in the file tree', desc: 'Small colored dots next to tagged files in Files.', kw: 'dots tree explorer', c: () => ctl.toggle('ui.library.treeTags') },
       { s: 'library', k: 'ui.library.details', name: 'Show the details panel', desc: 'Preview, tags and properties of the selected file, on the right of the Library.', kw: 'inspector preview panel', c: () => ctl.toggle('ui.library.details') },
@@ -142,6 +168,8 @@
       { s: 'ai', k: 'ai.test', name: 'Test connection', desc: 'Sends a tiny request to check the provider answers.', c: () => '<span class="test-result" id="sTestRes"></span><button class="btn" id="sTest"' + (p === 'off' ? ' disabled' : '') + '>Test</button>', noReset: true },
       { s: 'ai', k: 'org.aiInstructions', name: 'Extra instructions for the AI', desc: 'Plain-language preferences the AI should follow, like “Keep all Minecraft files in Games/Minecraft” or “Use Spanish folder names”.', kw: 'prompt preferences', stack: true, c: () => '<textarea class="textarea prose" data-t="textarea" data-k="org.aiInstructions" placeholder="One preference per line">' + esc(get('org.aiInstructions') || '') + '</textarea>' },
 
+      // extensions
+      ...extensionRows(),
       // hotkeys
       { s: 'hotkeys', k: 'ui.hotkeys', name: 'Shortcuts', desc: '', stack: true, c: () => hotkeysEditor(), custom: true, noReset: true },
 
@@ -349,6 +377,8 @@
         await C.loadSettings(); C.applyTheme(); C.renderAll(); redraw(); C.notice('Settings imported', 'success'); return;
       }
       if (act === 'reset-ui') return C.confirmModal('Reset look and layout?', '<p>Appearance, layout, explorer, graph and hotkey settings go back to defaults. Your rules, AI settings and recent folders are kept.</p>', 'Reset', async () => { await api().resetSettings('ui'); await C.loadSettings(); C.applyTheme(); C.renderAll(); redraw(); C.notice('Look and layout reset', 'success'); });
+      if (act === 'ext-folder') { if (!api().extOpenFolder) { C.notice('The extensions folder is part of the Windows app.', '', 3000); return; } return api().extOpenFolder().then(r => { if (r && r.error) C.notice(esc(r.error), 'error'); }); }
+      if (act === 'ext-reload') { if (window.OnyxExtensions) return window.OnyxExtensions.loadCommunity().then(list => { redraw(); C.notice(list.length ? 'Found ' + list.length + ' community extension' + (list.length === 1 ? '' : 's') + '. If you changed one that was already running, restart Onyx to load the new version.' : 'No community extensions found in the folder.', '', 5000); }); return; }
       if (act === 'reset-org') return C.confirmModal('Reset organizing?', '<p>This deletes your rules, never-move list and folder names, and resets organizing options.</p>', 'Reset organizing', async () => { await api().resetSettings('organize'); await C.loadSettings(); C.renderAll(); redraw(); C.notice('Organizing settings reset', 'success'); }, true);
       if (act === 'del-rule') return;
     });

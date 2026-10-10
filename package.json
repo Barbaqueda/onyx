@@ -1,7 +1,7 @@
 {
   "name": "onyx",
   "productName": "Onyx",
-  "version": "2.6.0",
+  "version": "2.7.0",
   "description": "Onyx \u2014 Smart File Organizer",
   "author": "Alexander Dunn",
   "license": "UNLICENSED",
@@ -32,6 +32,9 @@
       "fileops.js",
       "library.js",
       "ops.js",
+      "extensions.js",
+      "viewer.js",
+      "extensions/**",
       "renderer.js",
       "graph.js",
       "icons.js",

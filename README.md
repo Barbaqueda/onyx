@@ -101,6 +101,16 @@ Everything you do in Explorer works here too, with the same keys:
 - **Windows integration:** Properties (<kbd>Alt</kbd> <kbd>Enter</kbd>), Open with…, Run as administrator, Open in Terminal, Compress to ZIP / Extract all, Create shortcut, Copy as path (<kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>C</kbd>), and **Show more options** for Windows' own right-click menu (7-Zip, Send to, and everything else your apps add).
 - **Live:** changes made by other programs (a download finishing, a file saved in Explorer) show up on their own.
 
+### Preview anything, with extensions
+Press <kbd>Space</kbd> (or double-click) to look at a file without leaving Onyx, and <kbd>←</kbd> <kbd>→</kbd> to flip through the folder. What Onyx can show comes from **extensions**, which you can turn on and off in **Settings → Extensions**:
+
+- **Image Viewer:** zoom (wheel, <kbd>+</kbd> <kbd>−</kbd>, <kbd>1</kbd> for actual size, <kbd>0</kbd> to fit), drag to pan, rotate (<kbd>R</kbd>). HEIC, TIFF, PSD and camera RAW use the preview Windows makes.
+- **PDF Viewer:** the viewer from Chrome and Edge (pages, zoom, search, rotate, print), plus the first page in the details pane.
+- **Media Player:** video and sound, with a play button in the details pane for auditioning samples.
+- **Text Viewer:** notes, logs, CSV and code with line numbers.
+
+Anyone can make more. [EXTENSIONS.md](EXTENSIONS.md) explains how, with a working example in [`examples/extensions`](examples/extensions/csv-table).
+
 Tags follow files when you rename, move or copy them. Your own changes work in browse-only locations too; Onyx just won't *reorganize* them, and it never touches Windows' own folders (Windows, Program Files, AppData) or renames special folders like Downloads.
 
 <p align="center">
@@ -358,6 +368,9 @@ onyx/
 ├── tags.js          tagging: offline tagger, AI prompt, search language, tag database
 ├── library.js       the Library, Tags panel, quick find and tag editor
 ├── ops.js           file operations in the Library: rename, cut/copy/paste, delete, undo, drag and drop
+├── extensions.js    the extension registry (built-in and community extensions)
+├── viewer.js        the viewer that extensions draw into
+├── extensions/      built-in extensions: Image Viewer, PDF Viewer, Media Player, Text Viewer
 ├── fileops.js       the file-operation engine (Explorer's naming rules, Recycle Bin restore), pure Node
 ├── winshell.js      Windows integration: shared clipboard, Windows' right-click menu, Properties, ZIP
 ├── renderer.js      app UI and commands

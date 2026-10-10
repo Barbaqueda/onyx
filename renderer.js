@@ -109,6 +109,7 @@
     if (section === 'appearance' && !['zoom', 'radius', 'readingSize', 'accent'].includes(key)) { renderAll(); return; }
     if (section === 'explorer' || section === 'layout' || section === 'graph' || section === 'hotkeys') renderAll();
     if (section === 'library' && (key === 'treeTags' || key === 'thumbs' || key === 'details')) renderAll();
+    if (section === 'extensions' && window.OnyxExtensions) { window.OnyxExtensions.changed(key); LIB.refresh(); }
   }
   T.onSystemChange(() => applyTheme());
 
@@ -1427,12 +1428,16 @@
     }
     hydrate(document);
     await loadSettings();
+    // community extensions load once settings say which are on
+    if (window.OnyxExtensions) window.OnyxExtensions.loadCommunity().then(list => { if (list.length && S.vault) LIB.refresh(); });
     WS.init({
       icon, esc, notice, showMenu, viewMeta,
       renderAll: () => renderAll(),
       saveWorkspace: (w) => { S.settings.ui.workspace = w; persist('workspace', 'ui'); },
     }, UI().workspace);
     if (!store.get('layoutV3', false)) { store.set('layoutV3', true); WS.declutter(); }
+    // 2.7: double-click previews in Onyx (only if it was still on the old default)
+    if (!store.get('previewV1', false)) { store.set('previewV1', true); if (UI().library.dblClick === 'open') setUi('library', 'dblClick', 'preview'); }
     applyTheme();
     renderAll();
     const recent = S.settings.ui.recent || [];

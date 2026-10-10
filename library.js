@@ -22,7 +22,7 @@
   // ------------------------------------------------------------------ helpers
   const esc = s => C.esc(s);
   const icon = (n, c) => C.icon(n, c);
-  const U = () => Object.assign({ browse: 'folders', view: 'list', sort: 'name', dir: 'asc', group: 'none', details: true, autoTag: 'rules', dblClick: 'open', thumbs: true, treeTags: true, tagSort: 'count' }, (C.UI().library || {}));
+  const U = () => Object.assign({ browse: 'folders', view: 'list', sort: 'name', dir: 'asc', group: 'none', details: true, autoTag: 'rules', dblClick: 'preview', thumbs: true, treeTags: true, tagSort: 'count' }, (C.UI().library || {}));
   function setPref(key, value) { C.setUi('library', key, value); refresh(); }
   const V = () => C.S.vault;
   const tagState = () => (V() && V().tags) || { files: {}, colors: {}, saved: [] };
@@ -328,6 +328,7 @@
     }
     const key = (v.rootPath || 'demo') + '|' + v.vaultName + '|' + (v.browse ? 'b' : 'f');
     if (L.vaultKey !== key) {
+      if (window.OnyxViewer) window.OnyxViewer.close();
       L.vaultKey = key; L.sel.clear(); L.focus = null; L.anchor = null; L.query = ''; L.collapsed.clear(); L.thumbs.clear();
       L.cwd = ''; L.hist = []; L.fwd = []; L.loaded = new Set(); L.loading = new Map(); L.listErr = new Map(); L.search = null; L.pendingSelect = null;
     }
@@ -652,9 +653,15 @@
     if (files.length === 1) {
       const tags = tagsOf(f.path), auto = new Set(autoOf(f.path));
       const it = C.S.plan ? C.S.plan.items.find(i => i.source === f.path) : null;
-      h += thumbHTML(f, 320, 'ld-preview');
+      const VW = window.OnyxViewer, can = VW && VW.canPreview(f) && !V().demo;
+      const extra = can ? VW.detailsPreview(f) : null;
+      if (extra && extra.replace) h += '<div class="ld-ext">' + extra.html + '</div>';
+      else h += thumbHTML(f, 320, 'ld-preview');
+      if (extra && !extra.replace) h += '<div class="ld-ext">' + extra.html + '</div>';
       h += '<div class="ld-name" title="' + esc(f.name) + '">' + esc(f.name) + '</div>';
-      h += '<div class="ld-actions"><button class="btn small mod-cta" data-lib="open">' + icon('external-link') + 'Open</button><button class="btn small" data-lib="reveal">' + icon('folder-open') + 'Show in folder</button><button class="clickable-icon" data-lib="copy" aria-label="Copy path" data-tip="Copy path">' + icon('copy') + '</button></div>';
+      h += '<div class="ld-actions">' + (can ? '<button class="btn small mod-cta" data-lib="preview" data-tip="Preview in Onyx (Space)">' + icon('eye' in window.ICONS ? 'eye' : 'search') + 'Preview</button><button class="btn small" data-lib="open" data-tip="Open in its own app">' + icon('external-link') + 'Open</button>'
+        : '<button class="btn small mod-cta" data-lib="open">' + icon('external-link') + 'Open</button>') +
+        '<button class="clickable-icon" data-lib="reveal" aria-label="Show in folder" data-tip="Show in folder">' + icon('folder-open') + '</button><button class="clickable-icon" data-lib="copy" aria-label="Copy path" data-tip="Copy path">' + icon('copy') + '</button></div>';
       h += '<div class="ld-section"><div class="ld-title">Tags</div><div class="ld-chips">' + (tags.length ? tags.map(t => chip(t, { auto: auto.has(t), x: true, tip: true })).join('') : '<span class="muted small">No tags yet</span>') + '</div>' + tagInput() +
         '<div class="ld-tag-actions"><a class="mod-link" data-lib="tag-ai-sel" tabindex="0">' + icon('sparkles', 'xs') + 'Suggest with AI</a>' + (auto.size ? '<a class="mod-link" data-lib="retag-ai-sel" tabindex="0" data-tip="Replace the automatic tags with fresh ones">' + icon('refresh-cw', 'xs') + 'Re-tag</a>' : '') + '</div></div>';
       h += '<div class="ld-section ld-props">' +
@@ -675,6 +682,8 @@
       h += '<div class="ld-section"><button class="btn small block" data-lib="tag-ai-sel">' + icon('sparkles') + 'Suggest tags with AI</button><button class="btn small block" data-lib="retag-ai-sel">' + icon('refresh-cw') + 'Re-tag with AI</button><button class="btn small block" data-lib="tag-rules-sel">' + icon('zap') + 'Suggest tags from names</button><button class="btn small block" data-lib="copy">' + icon('copy') + 'Copy paths</button></div>';
     }
     el.innerHTML = h;
+    if (files.length === 1 && window.OnyxViewer && window.OnyxViewer.canPreview(files[0]) && !V().demo) { const pv = el.querySelector('.ld-preview'); if (pv) { pv.dataset.lib = 'preview'; pv.classList.add('is-previewable'); pv.dataset.tip = 'Preview (Space)'; } }
+    if (window.OnyxViewer) window.OnyxViewer.afterDetails(files.length === 1 ? files[0] : null);
     if (keepFocus) { const n = el.querySelector('#libTagInput'); if (n) n.focus(); }
   }
   function prop(ic, k, v) { return '<div class="ld-prop"><span class="ld-k">' + icon(ic, 'xs') + esc(k) + '</span><span class="ld-v">' + v + '</span></div>'; }
@@ -786,7 +795,14 @@
     const r = e.target.closest('.lib-row, .lib-tile');
     if (!r) return;
     if (r.dataset.dir) { go(r.dataset.path); return; }
-    if (U().dblClick === 'reveal') reveal(r.dataset.path); else openFile(r.dataset.path);
+    defaultAction(r.dataset.path);
+  }
+  // double-click and Enter: preview in Onyx when an extension can show it (the default), open it, or show it in its folder
+  function defaultAction(path) {
+    const d = U().dblClick, VW = window.OnyxViewer;
+    if (d === 'reveal') reveal(path);
+    else if (d === 'preview' && VW && VW.canPreview(fileBy(path))) VW.open(path);
+    else openFile(path);
   }
   function onContext(e) {
     const r = e.target.closest('.lib-row, .lib-tile');
@@ -834,8 +850,9 @@
       return;
     }
     if (mod && k.toLowerCase() === 'a') { e.preventDefault(); e.stopPropagation(); selectAll(); return; }
+    if (k === ' ' && L.focus && !mod && !e.shiftKey && window.OnyxViewer && fileBy(L.focus)) { e.preventDefault(); e.stopPropagation(); window.OnyxViewer.toggle(L.focus); return; }
     if (k === ' ' && L.focus && mod) { e.preventDefault(); if (L.sel.has(L.focus)) L.sel.delete(L.focus); else L.sel.add(L.focus); afterSelect(false); return; }
-    if (k === 'Enter' && L.focus) { e.preventDefault(); e.stopPropagation(); if (dirBy(L.focus) && !fileBy(L.focus)) go(L.focus); else if (e.shiftKey) reveal(L.focus); else openFile(L.focus); return; }
+    if (k === 'Enter' && L.focus) { e.preventDefault(); e.stopPropagation(); if (dirBy(L.focus) && !fileBy(L.focus)) go(L.focus); else if (e.shiftKey) reveal(L.focus); else if (mod) openFile(L.focus); else defaultAction(L.focus); return; }
     if (k === 'Backspace' && !mod) { e.preventDefault(); e.stopPropagation(); back(); return; }
     if (k === 'Escape') { if (L.sel.size) { e.preventDefault(); e.stopPropagation(); L.sel.clear(); afterSelect(false); } return; }
     if (k === '#' || (k === '3' && e.shiftKey)) { e.preventDefault(); tagEditor(); return; }
@@ -902,6 +919,7 @@
     } else if (name === 'save-search') saveSearch();
     else if (name === 'query') { L.query = el.dataset.q; refresh(); }
     else if (name === 'open') { if (L.focus || L.sel.size) openFile(L.focus || [...L.sel][0]); }
+    else if (name === 'preview') { const p = L.focus && fileBy(L.focus) ? L.focus : selFiles().map(f => f.path)[0]; if (p && window.OnyxViewer) window.OnyxViewer.open(p); }
     else if (name === 'reveal') { if (L.focus || L.sel.size) reveal(L.focus || [...L.sel][0]); }
     else if (name === 'copy') { C.api.copyText([...L.sel].map(p => V().rootPath ? V().rootPath.replace(/[\\/]+$/, '') + (V().rootPath.includes('\\') ? '\\' + p.replace(/\//g, '\\') : '/' + p) : p).join('\n')); C.notice('Copied ' + (L.sel.size === 1 ? 'path' : plural(L.sel.size, 'path')), 'success', 1800); }
     else if (name === 'tag-ai-sel') autoTag('ai', { paths: selFiles().map(f => f.path) });
@@ -1495,6 +1513,12 @@
       renderCmd, renderProgress, rowEl, dirBy, fileBy, absPath, go, openFile, organizeDir, addTags, tagMenu, viewMenu, sortMenu, reloadNow,
       cwd: () => L.cwd, query: () => L.query.trim(), focus: () => L.focus,
       showDetails: () => { if (!U().details) setPref('details', true); },
+    });
+    if (window.OnyxExtensions) window.OnyxExtensions.init(ctx);
+    if (window.OnyxViewer) window.OnyxViewer.init(ctx, {
+      fileBy, openFile, focusList,
+      previewList: () => (L.order || []).filter(f => !f.isDir && fileBy(f.path)),
+      selectPath: p => { if ((L.order || []).some(f => f.path === p)) setSingle(p); },
     });
   }
   window.OnyxLibrary = {

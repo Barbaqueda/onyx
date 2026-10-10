@@ -1,0 +1,1 @@
+{ "id": "hello-csv", "name": "CSV Table", "version": "0.1.0", "author": "Test", "description": "Shows CSV files as a table.", "main": "main.js" }

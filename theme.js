@@ -62,7 +62,8 @@
     },
     explorer: { tags: true, sizes: false, moveDots: true, guides: true, sort: 'name', foldersFirst: true },
     graph: { files: true, labels: true, nodeSize: 1, linkDistance: 1, repel: 1, textFade: 1, colorBy: 'folder' },
-    library: { browse: 'folders', view: 'list', sort: 'name', dir: 'asc', group: 'none', details: true, autoTag: 'rules', dblClick: 'open', thumbs: true, treeTags: true, tagSort: 'count' },
+    extensions: { 'image-viewer': true, 'pdf-viewer': true, 'media-player': true, 'text-viewer': true, community: false },
+    library: { browse: 'folders', view: 'list', sort: 'name', dir: 'asc', group: 'none', details: true, autoTag: 'rules', dblClick: 'preview', thumbs: true, treeTags: true, tagSort: 'count' },
     hotkeys: {},
     themes: {},          // the user's own color schemes, id -> theme
     workspace: null,     // panel layout (see renderer)

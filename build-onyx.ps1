@@ -12,7 +12,7 @@ $Src      = $PSScriptRoot
 $Dest     = Join-Path $env:USERPROFILE 'Downloads\onyx'
 $Cache    = Join-Path $env:LOCALAPPDATA 'onyx-build'
 if ($Src.TrimEnd('\') -ieq $Dest) { $Dest = Join-Path $env:USERPROFILE 'Downloads\Onyx App' }
-$AppFiles = 'package.json','main.js','preload.js','engine.js','tags.js','fileops.js','winshell.js','library.js','ops.js','renderer.js','graph.js','icons.js','theme.js','settings.js','workspace.js','index.html','styles.css','icon.ico','onyx-gem.ico','icon.png'
+$AppFiles = 'package.json','main.js','preload.js','engine.js','tags.js','fileops.js','winshell.js','library.js','ops.js','extensions.js','viewer.js','renderer.js','graph.js','icons.js','theme.js','settings.js','workspace.js','index.html','styles.css','icon.ico','onyx-gem.ico','icon.png','extensions\image-viewer.js','extensions\pdf-viewer.js','extensions\media-player.js','extensions\text-viewer.js'
 
 function Step($msg) { Write-Host ''; Write-Host "==> $msg" -ForegroundColor Cyan }
 function Download($url, $out) {
@@ -75,7 +75,7 @@ Rename-Item (Join-Path $Dest 'electron.exe') 'Onyx.exe'
 Remove-Item (Join-Path $Dest 'resources\default_app.asar') -Force -ErrorAction SilentlyContinue
 $AppDir = Join-Path $Dest 'resources\app'
 New-Item -ItemType Directory -Force -Path $AppDir | Out-Null
-foreach ($f in $AppFiles) { Copy-Item (Join-Path $Src $f) $AppDir -Force }
+foreach ($f in $AppFiles) { $to = Join-Path $AppDir $f; New-Item -ItemType Directory -Force -Path (Split-Path $to) | Out-Null; Copy-Item (Join-Path $Src $f) $to -Force }
 if (Test-Path (Join-Path $Src 'README.txt')) { Copy-Item (Join-Path $Src 'README.txt') $Dest -Force }
 if ($PendingKey) { Set-Content -Path (Join-Path $AppDir 'ai-key.txt') -Value $PendingKey -NoNewline }
 $SrcKey = Join-Path $Src 'ai-key.txt'
@@ -88,7 +88,7 @@ try {
   & $Rcedit (Join-Path $Dest 'Onyx.exe') --set-icon (Join-Path $Src 'icon.ico') `
     --set-version-string 'ProductName' 'Onyx' --set-version-string 'FileDescription' 'Onyx' `
     --set-version-string 'CompanyName' 'Onyx' --set-version-string 'OriginalFilename' 'Onyx.exe' `
-    --set-version-string 'InternalName' 'Onyx' --set-file-version '2.6.0' --set-product-version '2.6.0'
+    --set-version-string 'InternalName' 'Onyx' --set-file-version '2.7.0' --set-product-version '2.7.0'
   if ($LASTEXITCODE -ne 0) { throw "rcedit exit code $LASTEXITCODE" }
   Write-Host 'Icon set.' -ForegroundColor Green
 } catch { Write-Host "Couldn't set the icon ($($_.Exception.Message)). Onyx still works, it just has the Electron icon." -ForegroundColor Yellow }

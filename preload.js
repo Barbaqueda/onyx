@@ -63,6 +63,11 @@ contextBridge.exposeInMainWorld('onyx', {
   fsShortcut: (rels) => ipcRenderer.invoke('fs-shortcut', rels),
   fsWatch: (rel) => ipcRenderer.invoke('fs-watch', rel),
   startDrag: (rels) => ipcRenderer.send('start-drag', rels),
+  // the viewer
+  fileUrl: (rel, v) => 'onyx-file://local/' + String(rel).split('/').map(encodeURIComponent).join('/') + (v ? '?v=' + encodeURIComponent(v) : ''),
+  fileText: (rel) => ipcRenderer.invoke('file-text', rel),
+  extList: () => ipcRenderer.invoke('ext-list'),
+  extOpenFolder: () => ipcRenderer.invoke('ext-open-folder'),
   onDragDone: (cb) => ipcRenderer.on('drag-done', () => cb()),
   onFileOpProgress: (cb) => ipcRenderer.on('fileop-progress', (e, p) => cb(p)),
   onFsChanged: (cb) => ipcRenderer.on('fs-changed', (e, p) => cb(p)),

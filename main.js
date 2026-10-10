@@ -1,4 +1,5 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, safeStorage, clipboard, Menu, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, safeStorage, clipboard, Menu, nativeImage, protocol, net } = require('electron');
+const { pathToFileURL } = require('url');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -16,6 +17,14 @@ let scan = { root: '', files: [], dirs: [], skipped: [], demo: false };
 const ICON_FILE = path.join(__dirname, 'onyx-gem.ico');
 const APP_ID = 'com.onyx.organizer';
 if (process.platform === 'win32') app.setAppUserModelId(APP_ID);
+// onyx-file://local/<path inside the open folder>: how the viewer shows images, PDFs, video and audio.
+// Only files inside the folder you have open can be read this way.
+// onyx-ext://<folder>/<file>: community extensions, served only from Onyx's extensions folder.
+if (protocol && protocol.registerSchemesAsPrivileged) protocol.registerSchemesAsPrivileged([
+  { scheme: 'onyx-file', privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true } },
+  { scheme: 'onyx-ext', privileges: { standard: true, secure: true } },
+]);
+const EXT_DIR = () => path.join(app.getPath('userData'), 'extensions');
 const SETTINGS_FILE = () => path.join(app.getPath('userData'), 'settings.json');
 const HISTORY_FILE = () => path.join(app.getPath('userData'), 'history.json');
 
@@ -842,7 +851,7 @@ ipcMain.handle('file-thumb', async (e, { rel, size }) => {
   if (scan.demo || !scan.root) return null;
   const full = insideRoot(rel);
   if (!full) return null;
-  size = Math.max(32, Math.min(512, (size | 0) || 160));
+  size = Math.max(32, Math.min(1600, (size | 0) || 160));
   let st;
   try { st = fs.statSync(full); } catch { return null; }
   const key = full + '|' + st.mtimeMs + '|' + size;
@@ -1249,6 +1258,7 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      plugins: true,           // Chromium's PDF viewer
     },
   });
   mainWindow.setMenuBarVisibility(false);
@@ -1312,8 +1322,78 @@ app.on('second-instance', () => {
   mainWindow.show(); mainWindow.focus();
 });
 
+// community extensions: one folder each, with a manifest.json ({ id, name, version, main, description, author })
+function readExtensions() {
+  const dir = EXT_DIR(), out = [];
+  let names = [];
+  try { names = fs.readdirSync(dir, { withFileTypes: true }).filter(d => d.isDirectory()).map(d => d.name); } catch { return out; }
+  for (const folder of names.slice(0, 100)) {
+    try {
+      const m = JSON.parse(fs.readFileSync(path.join(dir, folder, 'manifest.json'), 'utf8'));
+      const main = String(m.main || 'main.js').replace(/\\/g, '/');
+      if (!/^[a-z0-9][a-z0-9-]{1,48}$/.test(m.id || '') || !m.name || main.split('/').includes('..')) continue;
+      if (!fs.existsSync(path.join(dir, folder, main))) continue;
+      out.push({ id: m.id, name: String(m.name).slice(0, 60), version: String(m.version || '1.0.0').slice(0, 20), description: String(m.description || '').slice(0, 300), author: String(m.author || '').slice(0, 60), folder, main });
+    } catch { /* not an extension */ }
+  }
+  return out;
+}
+ipcMain.handle('ext-list', async () => ({ dir: EXT_DIR(), extensions: readExtensions() }));
+ipcMain.handle('ext-open-folder', async () => {
+  const dir = EXT_DIR();
+  try { fs.mkdirSync(dir, { recursive: true }); } catch { /* exists */ }
+  const err = await shell.openPath(dir);
+  return err ? { error: err } : { ok: true, dir };
+});
+function serveFiles() {
+  protocol.handle('onyx-ext', req => {
+    try {
+      const u = new URL(req.url);
+      // onyx-ext://ext/<folder>/<file> (the folder is in the path: host names lose their capitals)
+      const parts = u.pathname.split('/').filter(Boolean).map(decodeURIComponent);
+      const folder = parts.shift() || '';
+      const rel = parts;
+      const base = path.resolve(EXT_DIR(), folder);
+      const full = path.resolve(base, ...rel);
+      if (!folder || folder.includes('..') || !full.toLowerCase().startsWith(path.resolve(EXT_DIR()).toLowerCase() + path.sep) || !full.toLowerCase().startsWith(base.toLowerCase() + path.sep)) return new Response('Not found', { status: 404 });
+      return net.fetch(pathToFileURL(full).href, { bypassCustomProtocolHandlers: true });
+    } catch { return new Response('Not found', { status: 404 }); }
+  });
+  protocol.handle('onyx-file', req => {
+    try {
+      const u = new URL(req.url);
+      const rel = u.pathname.split('/').filter(Boolean).map(decodeURIComponent).join('/');
+      if (scan.demo || !scan.root || !rel) return new Response('Not found', { status: 404 });
+      const full = insideRoot(rel);
+      if (!full || !fs.statSync(full).isFile()) return new Response('Not found', { status: 404 });
+      return net.fetch(pathToFileURL(full).href, { headers: req.headers, bypassCustomProtocolHandlers: true });
+    } catch { return new Response('Not found', { status: 404 }); }
+  });
+}
+// the start of a text file, for the viewer
+ipcMain.handle('file-text', async (e, rel) => {
+  if (scan.demo || !scan.root) return { error: 'Nothing to show' };
+  const full = insideRoot(rel);
+  if (!full) return { error: 'That file isn’t in this folder.' };
+  try {
+    const max = 1024 * 1024;
+    const fh = await fs.promises.open(full, 'r');
+    try {
+      const st = await fh.stat();
+      const buf = Buffer.alloc(Math.min(max, st.size));
+      await fh.read(buf, 0, buf.length, 0);
+      const sample = buf.subarray(0, 8000);
+      let zeros = 0; for (const b of sample) if (b === 0) zeros++;
+      const utf16 = buf[0] === 0xff && buf[1] === 0xfe;
+      if (zeros > 0 && !utf16) return { binary: true, size: st.size };
+      return { text: utf16 ? buf.subarray(2).toString('utf16le') : buf.toString('utf8').replace(/^\uFEFF/, ''), truncated: st.size > max, size: st.size };
+    } finally { await fh.close(); }
+  } catch (err) { return { error: FO.friendly(err) }; }
+});
+
 app.whenReady().then(() => {
   importKeyFile();
+  if (protocol && protocol.handle) serveFiles();
   fixShortcuts();
   // No app menu on Windows/Linux: removes Ctrl+R reload / devtools shortcuts that would wipe the current plan
   if (process.platform !== 'darwin') Menu.setApplicationMenu(null);

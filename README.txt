@@ -1,4 +1,4 @@
-Onyx 2.6 - source
+Onyx 2.7 - source
 =================
 
 EASIEST: double-click "Build Onyx.bat"
@@ -6,6 +6,13 @@ EASIEST: double-click "Build Onyx.bat"
   checks it, adds Onyx, and creates:
     Downloads\onyx\Onyx.exe   (+ desktop and Start menu shortcuts)
   then launches it. Run it again any time to rebuild; the download is cached.
+
+PREVIEW AND EXTENSIONS
+  Space or double-click previews a file inside Onyx; left/right arrows flip
+  through the folder. Viewers are extensions (Settings > Extensions):
+  Image Viewer, PDF Viewer, Media Player (video, sound), Text Viewer.
+  Community extensions go in %APPDATA%\Onyx\extensions (see EXTENSIONS.md
+  in the GitHub repository). They're off until you allow them.
 
 FILE EXPLORER FEATURES (in the Library)
   New folder Ctrl+Shift+N, rename F2, cut/copy/paste Ctrl+X/C/V (shared

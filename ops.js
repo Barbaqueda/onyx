@@ -301,7 +301,9 @@
       items.push({ label: 'Open in Terminal', icon: 'terminal-square', action: () => simple(C.api.fsTerminal, p) });
       items.push({ label: 'Organize this folder…', icon: 'sparkles', action: () => LI.organizeDir(p) });
     } else if (p) {
-      items.push({ label: 'Open', icon: 'external-link', sub: 'Enter', action: () => LI.openFile(p) });
+      const VW = window.OnyxViewer;
+      if (VW && VW.canPreview(LI.fileBy(p))) items.push({ label: 'Preview', icon: 'eye' in window.ICONS ? 'eye' : 'search', sub: 'Space', action: () => VW.open(p) });
+      items.push({ label: 'Open', icon: 'external-link', sub: VW && VW.canPreview(LI.fileBy(p)) ? '' : 'Enter', action: () => LI.openFile(p) });
       if (isWin()) items.push({ label: 'Open with…', icon: 'app-window' in window.ICONS ? 'app-window' : 'external-link', action: () => simple(C.api.fsOpenWith, p) });
       if (isWin() && EXEC.test(p)) items.push({ label: 'Run as administrator', icon: 'shield-check', action: () => simple(C.api.fsRunAdmin, p) });
     } else items.push({ label: 'Open ' + plural(s.filter(x => !isDirPath(x)).length, 'file'), icon: 'external-link', action: () => s.filter(x => !isDirPath(x)).slice(0, 15).forEach(LI.openFile) });
