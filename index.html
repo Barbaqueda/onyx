@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' onyx-ext:; style-src 'self' 'unsafe-inline'; img-src 'self' data: onyx-file:; media-src onyx-file:; frame-src onyx-file:; connect-src 'self' onyx-file:">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Onyx</title>
+<link rel="icon" href="icon.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app">
+  <aside class="ribbon">
+    <div class="ribbon-top drag">
+      <button class="clickable-icon" data-action="toggle-left" data-tip="Toggle left sidebar" data-cmd="toggle-left" data-icon="panel-left"></button>
+    </div>
+    <div class="ribbon-actions">
+      <button class="clickable-icon" data-action="view-library" data-tip="Library" data-cmd="view-library" data-icon="library"></button>
+      <button class="clickable-icon" data-action="places" data-tip="This PC" data-cmd="places" data-icon="monitor"></button>
+      <button class="clickable-icon" data-action="quick-find" data-tip="Quick find" data-cmd="quick-find" data-icon="search"></button>
+      <button class="clickable-icon" data-action="toggle-organize" data-tip="Organize" data-cmd="view-organize" data-icon="sparkles"></button>
+    </div>
+    <div class="ribbon-bottom">
+      <button class="clickable-icon" data-action="settings" data-tip="Settings" data-cmd="settings" data-icon="settings"></button>
+    </div>
+  </aside>
+
+  <aside class="dock" id="dock-left" data-region="left"></aside>
+  <div class="resize-handle left" data-side="left"></div>
+  <main class="workspace"><div class="main-panes" id="mainPanes"></div></main>
+  <div class="resize-handle right" data-side="right"></div>
+  <aside class="dock" id="dock-right" data-region="right"></aside>
+</div>
+
+<!-- views live here when they aren't shown; the layout moves them into docks and panes -->
+<div id="viewStore" hidden>
+  <section class="view-root" data-view="files">
+    <div class="nav-header">
+      <span class="nav-header-title">Folders</span>
+      <button class="clickable-icon" data-action="collapse-explorer" data-tip="Collapse all" data-icon="chevrons-down-up"></button>
+      <button class="clickable-icon" data-action="reveal-root" data-tip="Show in File Explorer" data-icon="external-link"></button>
+    </div>
+    <div class="nav-files tree" id="explorer" tabindex="0" role="tree" aria-label="Files"></div>
+  </section>
+  <section class="view-root" data-view="organize"><div class="side-content" id="side"></div></section>
+  <section class="view-root" data-view="structure"><div class="view-header"><div class="view-header-title" data-title></div><div class="view-actions" data-actions></div></div><div class="view-content" id="vs-structure"></div></section>
+  <section class="view-root" data-view="changes"><div class="view-header"><div class="view-header-title" data-title></div><div class="view-actions" data-actions></div></div><div class="view-content" id="vs-changes"></div></section>
+  <section class="view-root" data-view="library"><div class="view-header"><div class="view-header-title" data-title></div><div class="view-actions" data-actions></div></div><div class="view-content lib-host" id="vs-library"></div></section>
+  <section class="view-root" data-view="tags"><div class="nav-header" id="tagsHeader"></div><div class="tags-panel" id="vs-tags"></div></section>
+  <section class="view-root" data-view="graph"><div class="view-header"><div class="view-header-title" data-title></div><div class="view-actions" data-actions></div></div><div class="view-content" id="vs-graph"></div></section>
+</div>
+
+<div class="status-bar" id="statusBar"></div>
+<div class="notice-container" id="notices"></div>
+<div class="tooltip" id="tooltip" role="tooltip"></div>
+<div class="drop-overlay" id="dropOverlay"><div class="box"><img src="icon.png" alt="">Drop a folder to open it<span>Onyx will scan it; nothing moves until you apply a plan.</span></div></div>
+<div class="dock-edge left" data-edge="left">Dock left</div>
+<div class="dock-edge right" data-edge="right">Dock right</div>
+<div class="drop-indicator" id="dropIndicator"></div>
+
+<script src="engine.js"></script>
+<script src="tags.js"></script>
+<script src="icons.js"></script>
+<script src="theme.js"></script>
+<script src="graph.js"></script>
+<script src="settings.js"></script>
+<script src="workspace.js"></script>
+<script src="library.js"></script>
+<script src="ops.js"></script>
+<script src="extensions.js"></script>
+<script src="extensions/image-viewer.js"></script>
+<script src="extensions/pdf-viewer.js"></script>
+<script src="extensions/media-player.js"></script>
+<script src="extensions/text-viewer.js"></script>
+<script src="viewer.js"></script>
+<script src="renderer.js"></script>
+</body>
+</html>
