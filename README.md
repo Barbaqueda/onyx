@@ -90,6 +90,19 @@ The **Library** is a file explorer that also understands tags. Browse folder by 
 
 **Browse whole drives.** Open *This PC* to explore `C:\`, any other drive, your user folder or Program Files, folder by folder, the way Explorer does. Folders load as you open them, so even a full drive is instant, and search looks through everything below where you are. These locations are **browse-only**: you can search, preview, open and tag anything, but Onyx refuses to reorganize a drive or system folder. When you want to tidy something, right-click a folder and choose **Organize this folder**.
 
+### Works like File Explorer
+Everything you do in Explorer works here too, with the same keys:
+
+- **New folder** (<kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>N</kbd>), **rename in place** (<kbd>F2</kbd>; the extension stays unselected, and Onyx asks before you change it; select several and they become *Holiday (1)*, *Holiday (2)*…).
+- **Cut, copy, paste** (<kbd>Ctrl</kbd> <kbd>X</kbd> <kbd>C</kbd> <kbd>V</kbd>) **shared with Explorer's clipboard**: copy in Onyx, paste in Explorer, or the other way round. Pasting into the same folder makes *report - Copy.pdf*; names that already exist get **Replace / Skip / Keep both** (replaced files go to the Recycle Bin, folders merge).
+- **Delete to the Recycle Bin** (<kbd>Del</kbd>), or permanently with <kbd>Shift</kbd> <kbd>Del</kbd> after a warning.
+- **Undo** (<kbd>Ctrl</kbd> <kbd>Z</kbd>) for renames, moves, copies, new folders and deletes; a deleted file comes straight back out of the Recycle Bin.
+- **Drag and drop** onto folders, breadcrumbs or the Files tree (same drive moves, <kbd>Ctrl</kbd> copies), **out of Onyx** into Explorer, the desktop, email or any app, and **in from Explorer**.
+- **Windows integration:** Properties (<kbd>Alt</kbd> <kbd>Enter</kbd>), Open with…, Run as administrator, Open in Terminal, Compress to ZIP / Extract all, Create shortcut, Copy as path (<kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>C</kbd>), and **Show more options** for Windows' own right-click menu (7-Zip, Send to, and everything else your apps add).
+- **Live:** changes made by other programs (a download finishing, a file saved in Explorer) show up on their own.
+
+Tags follow files when you rename, move or copy them. Your own changes work in browse-only locations too; Onyx just won't *reorganize* them, and it never touches Windows' own folders (Windows, Program Files, AppData) or renames special folders like Downloads.
+
 <p align="center">
   <img src="docs/library.png" alt="The Library: every file with its tags, folder, date and size, the Tags panel on the left, and a preview with editable tags on the right" width="100%">
 </p>
@@ -262,8 +275,11 @@ Settings are searchable (`Ctrl + ,`, then type).
 | Open folder | <kbd>Ctrl</kbd> <kbd>O</kbd> | | Changes | <kbd>Ctrl</kbd> <kbd>2</kbd> |
 | Organize | <kbd>Ctrl</kbd> <kbd>Enter</kbd> | | Graph view | <kbd>Ctrl</kbd> <kbd>G</kbd> |
 | Apply plan | <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>Enter</kbd> | | Files | <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>E</kbd> |
-| Undo last organize | <kbd>Ctrl</kbd> <kbd>Z</kbd> | | Search files | <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>F</kbd> |
-| Reload from disk | <kbd>Ctrl</kbd> <kbd>R</kbd> | | Toggle sidebars | <kbd>Ctrl</kbd> <kbd>[</kbd> / <kbd>]</kbd> |
+| Undo last change | <kbd>Ctrl</kbd> <kbd>Z</kbd> | | Search files | <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>F</kbd> |
+| Reload from disk | <kbd>Ctrl</kbd> <kbd>R</kbd> / <kbd>F5</kbd> | | Toggle sidebars | <kbd>Ctrl</kbd> <kbd>[</kbd> / <kbd>]</kbd> |
+| New folder | <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>N</kbd> | | Rename | <kbd>F2</kbd> |
+| Cut / copy / paste | <kbd>Ctrl</kbd> <kbd>X</kbd> / <kbd>C</kbd> / <kbd>V</kbd> | | Delete to Recycle Bin | <kbd>Del</kbd> |
+| Properties | <kbd>Alt</kbd> <kbd>Enter</kbd> | | Copy as path | <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>C</kbd> |
 | Settings | <kbd>Ctrl</kbd> <kbd>,</kbd> | | Light / dark | <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>L</kbd> |
 | Zoom | <kbd>Ctrl</kbd> <kbd>=</kbd> / <kbd>-</kbd> / <kbd>0</kbd> | | | |
 
@@ -274,7 +290,8 @@ All of these can be changed in **Settings → Hotkeys**.
 ## 🛡 Safe by design
 
 - **Nothing moves until you apply.** Planning is read-only.
-- **Never overwrites.** Clashes get ` (2)`, ` (3)`, and so on.
+- **Never overwrites.** Clashes get ` (2)`, ` (3)`, and so on. When you choose *Replace* while pasting, the old file goes to the Recycle Bin.
+- **Deletes go to the Recycle Bin**, and <kbd>Ctrl</kbd> <kbd>Z</kbd> brings them back. Permanent delete always asks first.
 - **Every apply can be undone**, even after restarting Onyx.
 - **Refuses to reorganize dangerous places**: drive roots, Windows and Program Files, your whole user folder. You can still browse, search and tag them.
 - **Skips system files** like `desktop.ini`, `Thumbs.db` and `pagefile.sys`, and never opens `node_modules`, `.git` or virtual environments.
@@ -329,7 +346,7 @@ Needs [Node.js](https://nodejs.org).
 ```bash
 npm install
 npm start        # run with Electron
-npm test         # organizing, undo, settings, AI-provider and tagging tests (no Electron needed)
+npm test         # organizing, undo, settings, AI-provider, tagging and file-operation tests (no Electron needed)
 npm run dist     # package with electron-builder (Windows x64)
 ```
 
@@ -340,6 +357,9 @@ onyx/
 ├── engine.js        pure organizing logic, shared by main and renderer
 ├── tags.js          tagging: offline tagger, AI prompt, search language, tag database
 ├── library.js       the Library, Tags panel, quick find and tag editor
+├── ops.js           file operations in the Library: rename, cut/copy/paste, delete, undo, drag and drop
+├── fileops.js       the file-operation engine (Explorer's naming rules, Recycle Bin restore), pure Node
+├── winshell.js      Windows integration: shared clipboard, Windows' right-click menu, Properties, ZIP
 ├── renderer.js      app UI and commands
 ├── workspace.js     draggable, dockable panels
 ├── settings.js      settings window and color scheme builder

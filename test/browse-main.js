@@ -11,7 +11,7 @@ W('$Recycle.Bin/junk.txt'); W('notes.txt');
 let pass = 0; const ok = (c, m) => { assert.ok(c, m); pass++; };
 const handlers = {}, opened = [];
 const stub = { app: { getPath: k => k === 'userData' ? ud : k === 'home' ? home : path.join(home, k[0].toUpperCase() + k.slice(1)), whenReady: () => new Promise(() => {}), on() {}, requestSingleInstanceLock: () => true, quit() {}, getVersion: () => '2.4.0', isPackaged: false },
-  ipcMain: { handle: (n, f) => handlers[n] = f }, dialog: {}, shell: { openPath: async p => { opened.push(p); return ''; } }, clipboard: {}, Menu: {}, BrowserWindow: function () {}, nativeImage: {},
+  ipcMain: { on() {}, handle: (n, f) => handlers[n] = f }, dialog: {}, shell: { openPath: async p => { opened.push(p); return ''; } }, clipboard: {}, Menu: {}, BrowserWindow: function () {}, nativeImage: {},
   safeStorage: { isEncryptionAvailable: () => false } };
 const orig = Module._load; Module._load = function (r, ...a) { return r === 'electron' ? stub : orig.call(this, r, ...a); };
 require(path.join(APP, 'main.js'));

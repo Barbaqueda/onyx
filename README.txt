@@ -1,4 +1,4 @@
-Onyx 2.5 - source
+Onyx 2.6 - source
 =================
 
 EASIEST: double-click "Build Onyx.bat"
@@ -6,6 +6,15 @@ EASIEST: double-click "Build Onyx.bat"
   checks it, adds Onyx, and creates:
     Downloads\onyx\Onyx.exe   (+ desktop and Start menu shortcuts)
   then launches it. Run it again any time to rebuild; the download is cached.
+
+FILE EXPLORER FEATURES (in the Library)
+  New folder Ctrl+Shift+N, rename F2, cut/copy/paste Ctrl+X/C/V (shared
+  with Windows Explorer's clipboard), Delete = Recycle Bin, Shift+Delete =
+  permanent (asks first), Ctrl+Z undoes renames, moves, copies and deletes.
+  Drag onto folders, out to Explorer or any app, or in from Explorer.
+  Right-click: Open with, Run as administrator, Open in Terminal, Compress
+  to ZIP, Extract all, Create shortcut, Copy as path, Properties
+  (Alt+Enter), and Show more options (Windows' own menu).
 
 LIBRARY AND TAGS (Ctrl+L)
   A better file explorer: browse folder by folder like Windows Explorer

@@ -12,7 +12,7 @@ $Src      = $PSScriptRoot
 $Dest     = Join-Path $env:USERPROFILE 'Downloads\onyx'
 $Cache    = Join-Path $env:LOCALAPPDATA 'onyx-build'
 if ($Src.TrimEnd('\') -ieq $Dest) { $Dest = Join-Path $env:USERPROFILE 'Downloads\Onyx App' }
-$AppFiles = 'package.json','main.js','preload.js','engine.js','tags.js','library.js','renderer.js','graph.js','icons.js','theme.js','settings.js','workspace.js','index.html','styles.css','icon.ico','onyx-stone.ico','icon.png'
+$AppFiles = 'package.json','main.js','preload.js','engine.js','tags.js','fileops.js','winshell.js','library.js','ops.js','renderer.js','graph.js','icons.js','theme.js','settings.js','workspace.js','index.html','styles.css','icon.ico','onyx-gem.ico','icon.png'
 
 function Step($msg) { Write-Host ''; Write-Host "==> $msg" -ForegroundColor Cyan }
 function Download($url, $out) {
@@ -88,7 +88,7 @@ try {
   & $Rcedit (Join-Path $Dest 'Onyx.exe') --set-icon (Join-Path $Src 'icon.ico') `
     --set-version-string 'ProductName' 'Onyx' --set-version-string 'FileDescription' 'Onyx' `
     --set-version-string 'CompanyName' 'Onyx' --set-version-string 'OriginalFilename' 'Onyx.exe' `
-    --set-version-string 'InternalName' 'Onyx' --set-file-version '2.5.0' --set-product-version '2.5.0'
+    --set-version-string 'InternalName' 'Onyx' --set-file-version '2.6.0' --set-product-version '2.6.0'
   if ($LASTEXITCODE -ne 0) { throw "rcedit exit code $LASTEXITCODE" }
   Write-Host 'Icon set.' -ForegroundColor Green
 } catch { Write-Host "Couldn't set the icon ($($_.Exception.Message)). Onyx still works, it just has the Electron icon." -ForegroundColor Yellow }
@@ -101,7 +101,7 @@ foreach ($dir in @([Environment]::GetFolderPath('Desktop'), (Join-Path ([Environ
     $lnk = $Shell.CreateShortcut((Join-Path $dir 'Onyx.lnk'))
     $lnk.TargetPath = Join-Path $Dest 'Onyx.exe'
     $lnk.WorkingDirectory = $Dest
-    $lnk.IconLocation = (Join-Path $AppDir 'onyx-stone.ico') + ',0'
+    $lnk.IconLocation = (Join-Path $AppDir 'onyx-gem.ico') + ',0'
     $lnk.Description = 'Onyx - Smart File Organizer'
     $lnk.Save()
   } catch { Write-Host "Couldn't create a shortcut in $dir" -ForegroundColor Yellow }

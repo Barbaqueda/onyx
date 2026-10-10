@@ -13,7 +13,7 @@ let scan = { root: '', files: [], dirs: [], skipped: [], demo: false };
 // Settings (stored in the user's app-data folder; API key encrypted when possible)
 // ============================================================================
 // The stone icon lives under a name no earlier build used, so Windows can't show a stale cached icon for it
-const ICON_FILE = path.join(__dirname, 'onyx-stone.ico');
+const ICON_FILE = path.join(__dirname, 'onyx-gem.ico');
 const APP_ID = 'com.onyx.organizer';
 if (process.platform === 'win32') app.setAppUserModelId(APP_ID);
 const SETTINGS_FILE = () => path.join(app.getPath('userData'), 'settings.json');
@@ -76,7 +76,7 @@ const SYSTEM_DIRS = new Set(['$recycle.bin', 'system volume information', 'confi
 // Big folders we list but never walk into
 const OPAQUE_DIRS = new Set(['node_modules', '.git', '.svn', '.hg', '__pycache__', '.venv', 'venv', '.idea', '.vs', '.gradle', '.next']);
 
-function scanDirectory(rootPath) {
+function scanDirectory(rootPath, baseRel) {
   const files = [], dirs = [], skipped = [];
   const maxFiles = 20000;
   function walk(dir, rel, depth) {
@@ -105,7 +105,7 @@ function scanDirectory(rootPath) {
       }
     }
   }
-  walk(rootPath, '', 0);
+  walk(rootPath, baseRel || '', 0);
   return { files, dirs, skipped };
 }
 
@@ -135,12 +135,14 @@ function loadFolder(folder) {
   scan = { root: folder, files: r.files, dirs: r.dirs, skipped: r.skipped, demo: false };
   loadTagDb(); syncTags();
   rememberRecent(folder);
+  startWatch(folder, true);
   return vaultPayload();
 }
 function openBrowse(folder, reason) {
   scan = { root: path.resolve(folder), files: [], dirs: [], skipped: [], demo: false, browse: true, reason: reason || '', autoTagged: 0 };
   loadTagDb();
   rememberRecent(folder);
+  startWatch(scan.root, false);
   return vaultPayload();
 }
 function locationName(p) {
@@ -459,6 +461,7 @@ ipcMain.handle('open-recent', async (e, folder) => {
 ipcMain.handle('load-demo', async () => {
   const v = demoVault();
   scan = { root: '', files: v.files, dirs: v.dirs, skipped: [], demo: true };
+  stopWatch();
   loadTagDb(); syncTags();
   return vaultPayload();
 });
@@ -500,6 +503,7 @@ ipcMain.handle('organize', async (event, strategy) => {
 
 ipcMain.handle('apply-plan', async (event, items) => {
   if (scan.browse) return { error: BROWSE_ONLY };
+  quiet(5000);
   if (scan.demo) return { error: 'This is the demo vault — nothing to move. Open a real folder to apply changes.' };
   if (!scan.root) return { error: 'No folder open' };
   const r = applyPlan(scan.root, items);
@@ -513,6 +517,7 @@ ipcMain.handle('apply-plan', async (event, items) => {
 ipcMain.handle('undo', async () => {
   if (scan.browse) return { error: 'Nothing to undo here.' };
   if (!scan.root) return { error: 'No folder open' };
+  quiet(5000);
   const r = undoLast(scan.root);
   if (tagDb && r.restoredMoves) TG.applyMoves(tagDb, r.restoredMoves);
   Object.assign(scan, scanDirectory(scan.root));
@@ -723,19 +728,21 @@ async function listDirectory(rel) {
   for (let i = 0; i < jobs.length; i += 500) await Promise.all(jobs.slice(i, i + 500));
   return { path: rel, dirs, files, capped };
 }
+// tag new files from their names (offline, instant); returns true when the database changed
+function autoTagSome(files, dir) {
+  if (!tagDb || !files.length) return false;
+  let changed = TG.guardCleanup(tagDb, files) > 0;
+  if (autoTagMode() === 'rules') {
+    const map = Object.fromEntries(TG.autoTags(files, dir ? [{ path: dir }] : []));
+    changed = TG.syncRules(tagDb, map, new Set(files.map(f => f.path.toLowerCase()))) > 0 || changed;
+    changed = TG.applyAuto(tagDb, map, 'rules', files).added > 0 || changed;
+  }
+  return changed;
+}
 ipcMain.handle('list-dir', async (e, rel) => {
   if (!scan.root || scan.demo) return { error: 'Nothing to list' };
   const r = await listDirectory(rel);
-  // tag new files from their names as you browse (offline, instant)
-  if (!r.error && tagDb && r.files.length) {
-    let changed = TG.guardCleanup(tagDb, r.files) > 0;
-    if (autoTagMode() === 'rules') {
-      const map = Object.fromEntries(TG.autoTags(r.files, r.path ? [{ path: r.path }] : []));
-      changed = TG.syncRules(tagDb, map, new Set(r.files.map(f => f.path.toLowerCase()))) > 0 || changed;
-      changed = TG.applyAuto(tagDb, map, 'rules', r.files).added > 0 || changed;
-    }
-    if (changed) saveTagDb();
-  }
+  if (!r.error && autoTagSome(r.files, r.path)) saveTagDb();
   r.tags = tagView();
   return r;
 });
@@ -855,6 +862,374 @@ ipcMain.handle('file-thumb', async (e, { rel, size }) => {
 });
 
 // ============================================================================
+// File operations, like File Explorer: new, rename, cut / copy / paste, delete to
+// the Recycle Bin, undo; plus Windows' own menu, Properties, Open with, ZIP files
+// ============================================================================
+const FO = require('./fileops');
+const WSH = require('./winshell');
+const DEMO_ONLY = 'The demo vault only exists in memory, so there are no real files to change. Open a real folder to do that.';
+const opsUndo = [];                      // this session's file operations, newest last (like Explorer's Ctrl+Z)
+let opRun = null;                        // the paste in progress (for Cancel)
+let clipboardFallback = { files: [], effect: 'copy' };    // when Windows' clipboard isn't available
+const specialFolders = () => ['home', 'desktop', 'documents', 'downloads', 'pictures', 'music', 'videos'].map(k => { try { return app.getPath(k); } catch { return ''; } }).filter(Boolean);
+function relOf(full) {
+  if (!scan.root) return null;
+  const root = path.resolve(scan.root), f = path.resolve(full);
+  if (f.toLowerCase() === root.toLowerCase()) return '';
+  const rl = root.toLowerCase(), pre = rl.endsWith(path.sep) ? rl : rl + path.sep;
+  if (!f.toLowerCase().startsWith(pre)) return null;
+  return f.slice(pre.length).split(path.sep).join('/');
+}
+// something you change (rename, move, delete) must be inside the open folder, not the folder itself, and not a Windows folder
+function itemFull(rel) {
+  if (scan.demo) throw FO.userError(DEMO_ONLY);
+  const full = insideRoot(rel);
+  if (!full || !rel) throw FO.userError('That isn’t inside the folder you have open.');
+  const why = FO.protectedReason(full, process.env, specialFolders());
+  if (why) throw FO.userError(why);
+  return full;
+}
+// somewhere you put things
+function dirFull(rel) {
+  if (scan.demo) throw FO.userError(DEMO_ONLY);
+  const full = insideRoot(rel || '');
+  if (!full) throw FO.userError('That folder isn’t inside the folder you have open.');
+  const why = FO.protectedReason(full, process.env, [], { container: true });
+  if (why) throw FO.userError(why);
+  return full;
+}
+const trashItem = async p => { await shell.trashItem(p); };
+function pushUndo(entry) { opsUndo.push(Object.assign({ at: Date.now(), root: scan.root }, entry)); if (opsUndo.length > 50) opsUndo.shift(); }
+function undoLabel() {
+  const u = opsUndo[opsUndo.length - 1];
+  if (!u) return '';
+  const n = x => x + ' item' + (x === 1 ? '' : 's');
+  if (u.type === 'new') return 'Undo new ' + (u.what || 'item');
+  if (u.type === 'copy') return 'Undo copy of ' + n(u.created.length);
+  if (u.type === 'move') return 'Undo move of ' + n(u.moves.length);
+  if (u.type === 'trash') return 'Undo delete of ' + n(u.items.length);
+  return 'Undo rename';
+}
+
+// keep Onyx's copy of the folder (and the tags) in step after an operation, without rescanning everything
+function removeRel(r) {
+  if (r == null) return;
+  const low = r.toLowerCase(), pre = low + '/';
+  const keep = p => { const l = p.toLowerCase(); return l !== low && !l.startsWith(pre); };
+  scan.files = scan.files.filter(f => keep(f.path));
+  scan.dirs = scan.dirs.filter(d => keep(d.path));
+}
+function addTree(full, fresh) {
+  const r = relOf(full);
+  if (r == null || r === '') return;
+  removeRel(r);
+  let st; try { st = fs.lstatSync(full); } catch { return; }
+  const name = path.basename(full), lower = name.toLowerCase();
+  if (st.isSymbolicLink()) return;
+  if (st.isDirectory()) {
+    if (SYSTEM_DIRS.has(lower)) return;
+    const opaque = OPAQUE_DIRS.has(lower);
+    scan.dirs.push({ path: r, opaque });
+    if (!opaque) { const s = scanDirectory(full, r); scan.files.push(...s.files); scan.dirs.push(...s.dirs); fresh.push(...s.files); }
+  } else if (st.isFile() && !SYSTEM_FILES.has(lower)) {
+    const f = fileInfo(name, r, st); scan.files.push(f); fresh.push(f);
+  }
+}
+let suppressUntil = 0;
+const quiet = ms => { suppressUntil = Math.max(suppressUntil, Date.now() + (ms || 1500)); };
+async function finishOp(ch) {
+  ch = Object.assign({ added: [], removed: [], moved: [], copied: [], select: [] }, ch);
+  quiet();
+  const rel = relOf;
+  if (tagDb) {
+    const mv = ch.moved.map(m => ({ from: rel(m.from), to: rel(m.to) })).filter(m => m.from && m.to);
+    if (mv.length) TG.movePaths(tagDb, mv);
+    const cp = ch.copied.map(m => ({ from: rel(m.from), to: rel(m.to) })).filter(m => m.from && m.to);
+    if (cp.length) TG.copyPaths(tagDb, cp);
+    const gone = ch.removed.concat(ch.moved.filter(m => !rel(m.to)).map(m => m.from)).map(rel).filter(Boolean);
+    if (gone.length) TG.forgetPaths(tagDb, gone);
+  }
+  const out = { select: ch.select.map(rel).filter(x => x) };
+  if (!scan.browse) {
+    const fresh = [];
+    for (const p of ch.removed) removeRel(rel(p));
+    for (const m of ch.moved) { removeRel(rel(m.from)); addTree(m.to, fresh); }
+    for (const p of ch.added) addTree(p, fresh);
+    autoTagSome(fresh);
+    saveTagDb();
+    out.vault = vaultPayload();
+  } else {
+    const dirs = new Set();
+    const note = p => { const r = rel(p); if (r == null || r === '') return; dirs.add(path.posix.dirname(r) === '.' ? '' : path.posix.dirname(r)); };
+    for (const p of ch.removed.concat(ch.added)) note(p);
+    for (const m of ch.moved.concat(ch.copied)) { note(m.from); note(m.to); }
+    out.goneDirs = ch.removed.concat(ch.moved.map(m => m.from)).map(rel).filter(Boolean);
+    out.listings = [];
+    for (const d of dirs) {
+      const r = await listDirectory(d);
+      if (!r.error) autoTagSome(r.files, r.path);
+      out.listings.push(r);
+    }
+    saveTagDb();
+    out.tags = tagView();
+  }
+  return out;
+}
+const fail = e => ({ error: FO.friendly(e) });
+function guarded(fn) {
+  return async (event, arg) => {
+    if (!scan.root && !scan.demo) return { error: 'Open a folder first.' };
+    quiet(60000);
+    try { return await fn(event, arg); }
+    catch (e) { return fail(e); }
+    finally { suppressUntil = Date.now() + 1500; }
+  };
+}
+
+ipcMain.handle('fs-new', guarded(async (e, { dir, kind }) => {
+  const d = dirFull(dir);
+  const full = kind === 'text' ? await FO.newFile(d) : await FO.newFolder(d);
+  pushUndo({ type: 'new', path: full, what: kind === 'text' ? 'text document' : 'folder' });
+  return finishOp({ added: [full], select: [full] });
+}));
+ipcMain.handle('fs-rename', guarded(async (e, { rel, name }) => {
+  const full = itemFull(rel);
+  const to = await FO.rename(full, name);
+  if (to === full) return { select: [rel] };
+  pushUndo({ type: 'rename', from: full, to });
+  return finishOp({ moved: [{ from: full, to }], select: [to] });
+}));
+// several items at once, like Explorer: "Holiday (1).jpg", "Holiday (2).jpg"… each keeps its own extension
+ipcMain.handle('fs-rename-many', guarded(async (e, { rels, name }) => {
+  const base = FO.tidyName(name);
+  const err = FO.checkName(base);
+  if (err) throw FO.userError(err);
+  const fulls = rels.map(itemFull);
+  const pairs = [];
+  let n = 1;
+  for (const full of fulls) {
+    const st = fs.statSync(full);
+    const ext = st.isDirectory() ? '' : path.extname(full);
+    let to;
+    do { to = path.join(path.dirname(full), base + ' (' + n + ')' + ext); n++; } while (fs.existsSync(to) && to.toLowerCase() !== full.toLowerCase());
+    if (to === full) continue;
+    await fs.promises.rename(full, to);
+    pairs.push({ from: full, to });
+  }
+  if (pairs.length) pushUndo({ type: 'rename-many', pairs });
+  return finishOp({ moved: pairs, select: pairs.map(p => p.to) });
+}));
+ipcMain.handle('fs-trash', guarded(async (e, rels) => {
+  const fulls = (rels || []).map(itemFull);
+  const done = [], failed = [];
+  for (const full of fulls) {
+    try { await trashItem(full); done.push(full); }
+    catch (err) { failed.push({ path: relOf(full), error: FO.friendly(err) }); }
+  }
+  if (done.length) pushUndo({ type: 'trash', items: done });
+  return Object.assign(await finishOp({ removed: done }), { done: done.length, failed });
+}));
+// Shift+Delete: gone for good (the window asks first)
+ipcMain.handle('fs-delete', guarded(async (e, rels) => {
+  const fulls = (rels || []).map(itemFull);
+  const done = [], failed = [];
+  for (const full of fulls) {
+    try { await fs.promises.rm(full, { recursive: true, force: false }); done.push(full); }
+    catch (err) { failed.push({ path: relOf(full), error: FO.friendly(err) }); }
+  }
+  return Object.assign(await finishOp({ removed: done }), { done: done.length, failed });
+}));
+function pasteSources(list) {
+  const out = [];
+  for (const p of (Array.isArray(list) ? list : []).slice(0, 20000)) {
+    const s = String(p || '');
+    if (!s || !path.isAbsolute(s)) continue;
+    out.push(path.resolve(s));
+  }
+  return out;
+}
+ipcMain.handle('fs-plan-paste', guarded(async (e, { sources, dest, mode }) => {
+  const d = dirFull(dest);
+  const items = await FO.planPaste(pasteSources(sources), d, mode === 'move' ? 'move' : 'copy');
+  return { items: items.map(i => ({ name: i.name, dir: i.dir, conflict: !!i.conflict, problem: i.problem || '', sameDir: !!i.sameDir, noop: !!i.noop })) };
+}));
+ipcMain.handle('fs-paste', guarded(async (event, { sources, dest, mode, resolution, fromClipboard }) => {
+  const d = dirFull(dest);
+  mode = mode === 'move' ? 'move' : 'copy';
+  const src = pasteSources(sources);
+  if (!src.length) return { error: 'Nothing to paste.' };
+  if (mode === 'move') for (const s of src) { const why = FO.protectedReason(s, process.env, specialFolders()); if (why) throw FO.userError(path.basename(s) + ': ' + why); }
+  const run = opRun = { cancelled: false };
+  let last = 0;
+  const r = await FO.paste({
+    sources: src, destDir: d, mode, resolution: resolution || 'both', trash: trashItem,
+    isCancelled: () => run.cancelled,
+    onProgress: (done, total) => { const now = Date.now(); if (now - last > 120) { last = now; event.sender.send('fileop-progress', { mode, done, total }); } },
+  });
+  opRun = null;
+  event.sender.send('fileop-progress', null);
+  if (mode === 'move' && fromClipboard && r.moves.length && !r.failed.length) { await WSH.clearClipboard(); clipboardFallback = { files: [], effect: 'copy' }; }
+  if (r.created.length || r.moves.length) pushUndo(mode === 'move' ? { type: 'move', moves: r.moves, replaced: r.replaced } : { type: 'copy', created: r.created, replaced: r.replaced });
+  const ch = { select: [], added: [], moved: [], copied: [], removed: r.replaced.slice() };
+  if (mode === 'move') { ch.moved = r.moves; ch.select = r.moves.filter(m => FO.same(path.dirname(m.to), d)).map(m => m.to); }
+  else {
+    ch.added = r.created;
+    ch.select = r.created.filter(p => FO.same(path.dirname(p), d));
+    // the copy keeps the tags you gave the original
+    ch.copied = r.pairs;
+  }
+  const out = await finishOp(ch);
+  return Object.assign(out, {
+    mode, count: mode === 'move' ? r.moves.length : r.created.length, skipped: r.skipped.length, replaced: r.replaced.length,
+    failed: r.failed.map(f => ({ name: path.basename(f.path), error: f.error })), cancelled: !!r.cancelled, bytes: r.done.bytes,
+  });
+}));
+ipcMain.handle('fs-cancel', async () => { if (opRun) opRun.cancelled = true; });
+
+ipcMain.handle('fs-undo', guarded(async () => {
+  const u = opsUndo[opsUndo.length - 1];
+  if (!u) return { error: 'Nothing to undo.' };
+  if (path.resolve(u.root || '').toLowerCase() !== path.resolve(scan.root || '').toLowerCase()) return { error: 'The last change was in another folder (' + path.basename(u.root || '') + '). Open it to undo.' };
+  opsUndo.pop();
+  const label = { rename: 'rename', 'rename-many': 'rename', new: 'new ' + (u.what || 'item'), copy: 'copy', move: 'move', trash: 'delete' }[u.type];
+  const ch = { added: [], removed: [], moved: [], select: [] };
+  const failed = [];
+  const tryDo = async (what, fn) => { try { await fn(); } catch (e) { failed.push({ name: path.basename(what), error: FO.friendly(e) }); } };
+  if (u.type === 'rename' || u.type === 'rename-many' || u.type === 'move') {
+    const pairs = u.type === 'rename' ? [{ from: u.from, to: u.to }] : u.type === 'rename-many' ? u.pairs : u.moves;
+    for (const p of pairs.slice().reverse()) await tryDo(p.to, async () => {
+      if (!fs.existsSync(p.to)) throw FO.userError('It was moved or deleted since.');
+      if (fs.existsSync(p.from) && !FO.same(p.from, p.to)) throw FO.userError('Something else is now where it was.');
+      await fs.promises.mkdir(path.dirname(p.from), { recursive: true });
+      try { await fs.promises.rename(p.to, p.from); }
+      catch (e) { if (e.code !== 'EXDEV') throw e; await FO.copyTree(p.to, p.from, { done: { bytes: 0, files: 0 }, skipped: [] }); await fs.promises.rm(p.to, { recursive: true, force: true }); }
+      ch.moved.push({ from: p.to, to: p.from }); ch.select.push(p.from);
+    });
+  }
+  if (u.type === 'new' || u.type === 'copy') {
+    for (const p of (u.type === 'new' ? [u.path] : u.created)) await tryDo(p, async () => { if (fs.existsSync(p)) { await trashItem(p); ch.removed.push(p); } });
+  }
+  if (u.type === 'trash' || u.replaced) {
+    for (const p of (u.type === 'trash' ? u.items : u.replaced)) await tryDo(p, async () => { await FO.restoreFromBin(p, process.env.ONYX_TEST_BIN ? [process.env.ONYX_TEST_BIN] : undefined); ch.added.push(p); ch.select.push(p); });
+  }
+  const out = await finishOp(ch);
+  return Object.assign(out, { undone: label, failed, next: undoLabel() });
+}));
+ipcMain.handle('fs-undo-label', async () => undoLabel());
+
+// clipboard: shared with File Explorer, so you can copy in Onyx and paste in Explorer, and the other way round
+ipcMain.handle('fs-clip-set', guarded(async (e, { rels, effect }) => {
+  const fulls = (rels || []).map(r => (effect === 'move' ? itemFull(r) : insideRoot(r))).filter(Boolean);
+  if (!fulls.length) return { error: 'Nothing selected.' };
+  clipboardFallback = { files: fulls, effect: effect === 'move' ? 'move' : 'copy' };
+  const r = await WSH.setClipboardFiles(fulls, clipboardFallback.effect);
+  return { ok: true, count: fulls.length, shared: !r.error };
+}));
+ipcMain.handle('fs-clip-get', async () => {
+  if (WSH.WIN) { const r = await WSH.getClipboardFiles(); if (!r.error) return r; }
+  return { files: clipboardFallback.files.filter(p => fs.existsSync(p)), effect: clipboardFallback.effect };
+});
+
+// Windows' own windows and menus
+const fullsOf = rels => (rels || []).map(r => (r === '' ? (scan.demo ? null : path.resolve(scan.root)) : insideRoot(r))).filter(Boolean);
+ipcMain.handle('fs-properties', async (e, rels) => { if (scan.demo) return { error: DEMO_ONLY }; const f = fullsOf(rels); return f.length ? WSH.properties(f) : { error: 'Nothing selected.' }; });
+ipcMain.handle('fs-open-with', async (e, rel) => { if (scan.demo) return { error: DEMO_ONLY }; const f = fullsOf([rel]); return f.length ? WSH.openWith(f) : { error: 'Nothing selected.' }; });
+ipcMain.handle('fs-shell-menu', async (e, rels) => {
+  if (scan.demo) return { error: DEMO_ONLY };
+  const f = fullsOf(rels);
+  if (!f.length) return { error: 'Nothing selected.' };
+  // Windows' menu needs everything to be in one folder
+  const same = f.filter(p => FO.same(path.dirname(p), path.dirname(f[0])));
+  const r = await WSH.showShellMenu(same);
+  if (mainWindow && !/^properties$/i.test(r.verb || '')) { try { mainWindow.focus(); } catch { /* closed */ } }
+  return r;
+});
+ipcMain.handle('fs-terminal', async (e, rel) => { try { return await WSH.openTerminal(dirFull(rel)); } catch (err) { return fail(err); } });
+ipcMain.handle('fs-run-admin', async (e, rel) => { try { return await WSH.runAsAdmin(itemFull(rel)); } catch (err) { return fail(err); } });
+ipcMain.handle('fs-compress', guarded(async (e, rels) => {
+  const fulls = (rels || []).map(r => insideRoot(r)).filter(Boolean);
+  if (!fulls.length) return { error: 'Nothing selected.' };
+  const dir = dirFull(relOf(path.dirname(fulls[0])));
+  const first = path.basename(fulls[0]);
+  const base = fs.statSync(fulls[0]).isDirectory() ? first : path.basename(first, path.extname(first)) || first;
+  const zip = path.join(dir, await FO.uniqueName(dir, base + '.zip', 'paren', false));
+  const r = await WSH.compress(fulls, zip);
+  if (r.error) return { error: 'Couldn’t make the ZIP file: ' + r.error };
+  pushUndo({ type: 'new', path: zip, what: 'ZIP file' });
+  return finishOp({ added: [zip], select: [zip] });
+}));
+ipcMain.handle('fs-extract', guarded(async (e, rel) => {
+  const full = insideRoot(rel);
+  if (!full) return { error: 'That file isn’t here.' };
+  const dir = dirFull(relOf(path.dirname(full)));
+  const base = path.basename(full).replace(/\.(tar\.(gz|bz2|xz)|zip|7z|rar|tgz|tar|gz)$/i, '') || 'Extracted';
+  const dest = path.join(dir, await FO.uniqueName(dir, base, 'paren', true));
+  const r = await WSH.extract(full, dest);
+  if (r.error) { try { if (fs.existsSync(dest) && !fs.readdirSync(dest).length) fs.rmdirSync(dest); } catch { /* leave it */ } return { error: 'Couldn’t extract it: ' + r.error }; }
+  pushUndo({ type: 'new', path: dest, what: 'folder' });
+  return finishOp({ added: [dest], select: [dest] });
+}));
+ipcMain.handle('fs-shortcut', guarded(async (e, rels) => {
+  if (process.platform !== 'win32') return { error: 'Shortcuts are a Windows thing.' };
+  const made = [];
+  for (const r of rels || []) {
+    const full = insideRoot(r); if (!full) continue;
+    const dir = dirFull(relOf(path.dirname(full)));
+    const lnk = path.join(dir, await FO.uniqueName(dir, path.basename(full) + ' - Shortcut.lnk', 'paren', false));
+    if (shell.writeShortcutLink(lnk, 'create', { target: full })) { made.push(lnk); pushUndo({ type: 'new', path: lnk, what: 'shortcut' }); }
+  }
+  return finishOp({ added: made, select: made });
+}));
+
+// drag files out of Onyx into Explorer, the desktop, an email or any other app
+let dragIcon = null;
+ipcMain.on('start-drag', (event, rels) => {
+  const files = fullsOf(rels).filter(p => fs.existsSync(p)).slice(0, 500);
+  if (!files.length) { event.sender.send('drag-done'); return; }
+  if (!dragIcon) { dragIcon = nativeImage.createFromPath(path.join(__dirname, 'icon.png')); if (!dragIcon.isEmpty()) dragIcon = dragIcon.resize({ width: 32, height: 32 }); }
+  try { event.sender.startDrag({ file: files[0], files, icon: dragIcon }); } catch { /* drag was cancelled */ }
+  event.sender.send('drag-done');
+});
+
+// see changes made by other programs (Explorer, downloads finishing) as they happen
+let watcher = null, watchTimer = null;
+const watchDirs = new Set();
+function stopWatch() { if (watcher) { try { watcher.close(); } catch { /* closed */ } watcher = null; } }
+function startWatch(full, recursive) {
+  stopWatch();
+  if (!full || !mainWindow) return;          // nothing to tell without a window
+  try {
+    // Windows and macOS watch a whole tree natively; on Linux only the top folder is watched
+    const w = fs.watch(full, { recursive: !!recursive && process.platform !== 'linux' }, (ev, name) => onFsEvent(full, name));
+    w.on('error', () => { if (watcher === w) stopWatch(); });
+    if (w.unref) w.unref();
+    watcher = w;
+  } catch { watcher = null; }
+}
+function onFsEvent(base, name) {
+  if (!mainWindow || scan.demo || !scan.root) return;
+  if (name) {
+    const r = relOf(path.join(base, String(name)));
+    if (r == null) return;
+    const segs = r.toLowerCase().split('/');
+    if (segs.some(s => OPAQUE_DIRS.has(s) || SYSTEM_DIRS.has(s)) || SYSTEM_FILES.has(segs[segs.length - 1]) || /^~\$|\.tmp$|\.onyx-rename-/i.test(segs[segs.length - 1])) return;
+    watchDirs.add(path.posix.dirname(r) === '.' ? '' : path.posix.dirname(r));
+  }
+  clearTimeout(watchTimer);
+  watchTimer = setTimeout(flushWatch, 700);
+}
+function flushWatch() {
+  if (Date.now() < suppressUntil) { watchDirs.clear(); return; }
+  const dirs = [...watchDirs]; watchDirs.clear();
+  if (mainWindow && scan.root && !scan.demo) { try { mainWindow.webContents.send('fs-changed', { dirs }); } catch { /* window closed */ } }
+}
+ipcMain.handle('fs-watch', async (e, rel) => {
+  if (!scan.browse || !scan.root) return;
+  const full = insideRoot(rel || '');
+  if (full) startWatch(full, false);
+});
+
+// ============================================================================
 // Window
 // ============================================================================
 function createWindow() {
@@ -942,6 +1317,10 @@ app.whenReady().then(() => {
   fixShortcuts();
   // No app menu on Windows/Linux: removes Ctrl+R reload / devtools shortcuts that would wipe the current plan
   if (process.platform !== 'darwin') Menu.setApplicationMenu(null);
+  WSH.setDataDir(app.getPath('userData'));
   createWindow();
+  // start the clipboard helper in the background so the first copy or paste is instant
+  const warm = setTimeout(() => WSH.warmUp(), 4000); if (warm.unref) warm.unref();
 });
 app.on('window-all-closed', () => app.quit());
+app.on('will-quit', () => { stopWatch(); WSH.shutdown(); });

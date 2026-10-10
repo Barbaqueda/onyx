@@ -3,7 +3,7 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'onyx-'));
 const ud = path.join(tmp, 'userdata'), root = path.join(tmp, 'Downloads');
 const handlers = {};
 const stub = { app: { getPath: () => ud, whenReady: () => new Promise(() => {}), on() {}, requestSingleInstanceLock: () => true, quit() {}, getVersion: () => '2.0.0' },
-  ipcMain: { handle: (n, f) => handlers[n] = f }, dialog: {}, shell: {}, clipboard: {}, Menu: {}, BrowserWindow: function () {},
+  ipcMain: { on() {}, handle: (n, f) => handlers[n] = f }, dialog: {}, shell: {}, clipboard: {}, Menu: {}, BrowserWindow: function () {},
   safeStorage: { isEncryptionAvailable: () => false } };
 const orig = Module._load; Module._load = function (r, ...a) { return r === 'electron' ? stub : orig.call(this, r, ...a); };
 require(require('path').join(__dirname, '..', 'main.js'));

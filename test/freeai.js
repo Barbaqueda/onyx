@@ -1,7 +1,7 @@
 const Module = require('module'); const fs = require('fs'); const path = require('path'); const os = require('os');
 const ud = fs.mkdtempSync(path.join(os.tmpdir(), 'onyx-')); const root = path.join(ud, 'Desk'); const handlers = {};
 let ready;
-const stub = { app: { getPath: () => ud, whenReady: () => ({ then: f => { ready = f; } }), on() {}, requestSingleInstanceLock: () => true, quit() {}, getVersion: () => '2.1.0' }, ipcMain: { handle: (n, f) => handlers[n] = f },
+const stub = { app: { getPath: () => ud, whenReady: () => ({ then: f => { ready = f; } }), on() {}, requestSingleInstanceLock: () => true, quit() {}, getVersion: () => '2.1.0' }, ipcMain: { on() {}, handle: (n, f) => handlers[n] = f },
   dialog: {}, shell: {}, clipboard: {}, Menu: { setApplicationMenu() {} }, BrowserWindow: function () { return { setMenuBarVisibility() {}, loadFile() {}, once() {}, on() {}, webContents: { setWindowOpenHandler() {}, on() {} } }; },
   safeStorage: { isEncryptionAvailable: () => true, encryptString: s => Buffer.from('ENC:' + s), decryptString: b => b.toString().replace(/^ENC:/, '') } };
 const orig = Module._load; Module._load = function (r, ...a) { return r === 'electron' ? stub : orig.call(this, r, ...a); };

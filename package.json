@@ -1,8 +1,8 @@
 {
   "name": "onyx",
   "productName": "Onyx",
-  "version": "2.5.0",
-  "description": "Onyx — Smart File Organizer",
+  "version": "2.6.0",
+  "description": "Onyx \u2014 Smart File Organizer",
   "author": "Alexander Dunn",
   "license": "UNLICENSED",
   "private": true,
@@ -10,7 +10,7 @@
   "scripts": {
     "start": "electron .",
     "dist": "electron-builder --win --x64",
-    "test": "node test/e2e.js && node test/deep.js && node test/persist.js && node test/freeai.js && node test/tagdb.js && node test/browse-main.js"
+    "test": "node test/e2e.js && node test/deep.js && node test/persist.js && node test/freeai.js && node test/tagdb.js && node test/browse-main.js && node test/fileops.js && node test/fileops-main.js"
   },
   "devDependencies": {
     "electron": "32.3.3",
@@ -28,7 +28,10 @@
       "preload.js",
       "engine.js",
       "tags.js",
+      "winshell.js",
+      "fileops.js",
       "library.js",
+      "ops.js",
       "renderer.js",
       "graph.js",
       "icons.js",
@@ -38,7 +41,7 @@
       "index.html",
       "styles.css",
       "icon.ico",
-      "onyx-stone.ico",
+      "onyx-gem.ico",
       "icon.png",
       "package.json"
     ],

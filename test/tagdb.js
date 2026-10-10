@@ -176,7 +176,7 @@ const W = (p, c) => { fs.mkdirSync(path.dirname(path.join(root, p)), { recursive
 ['invoice_2024_03.pdf', 'invoice_2024_04.pdf', 'Screenshot 2026-09-12.png', 'notes.txt', 'setup.exe'].forEach(x => W(x));
 const handlers = {}; const opened = [];
 const stub = { app: { getPath: () => ud, whenReady: () => new Promise(() => {}), on() {}, requestSingleInstanceLock: () => true, quit() {}, getVersion: () => '2.3.0', isPackaged: false },
-  ipcMain: { handle: (n, fn) => handlers[n] = fn }, dialog: {}, shell: { openPath: async p => { opened.push(p); return ''; } }, clipboard: {}, Menu: {}, BrowserWindow: function () {}, nativeImage: {},
+  ipcMain: { on() {}, handle: (n, fn) => handlers[n] = fn }, dialog: {}, shell: { openPath: async p => { opened.push(p); return ''; } }, clipboard: {}, Menu: {}, BrowserWindow: function () {}, nativeImage: {},
   safeStorage: { isEncryptionAvailable: () => false } };
 const orig = Module._load; Module._load = function (r, ...a) { return r === 'electron' ? stub : orig.call(this, r, ...a); };
 require(path.join(fs.existsSync(APP) ? APP : path.join(__dirname, '..'), 'main.js'));

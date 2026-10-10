@@ -119,7 +119,10 @@
     el.setAttribute('role', 'status');
     const ic = { success: 'check-circle', error: 'alert-triangle', warn: 'alert-triangle' }[type] || 'info';
     el.innerHTML = icon(ic) + '<div>' + msg + (action ? '<a class="n-action">' + esc(action.label) + '</a>' : '') + '</div>';
-    $('#notices').appendChild(el);
+    const box = $('#notices');
+    box.appendChild(el);
+    const live = [...box.querySelectorAll('.notice:not(.out)')];
+    for (const old of live.slice(0, Math.max(0, live.length - 3))) { old.classList.add('out'); setTimeout(() => old.remove(), 200); }
     const close = () => { el.classList.add('out'); setTimeout(() => el.remove(), 200); };
     el.addEventListener('click', e => { if (action && e.target.closest('.n-action')) action.run(); close(); });
     setTimeout(close, ms || (UI().layout.noticeSeconds || 5) * 1000 * (action ? 1.6 : 1));
@@ -734,7 +737,6 @@
       h += '<div class="side-section"><div class="side-section-title">Skipped while scanning · ' + V.skipped.length + '</div><div class="skipped-list">' + V.skipped.slice(0, 200).map(esc).join('<br>') + '</div></div>';
     }
     $('#side').innerHTML = h;
-    $('#ribbonUndo').disabled = !(V && V.undo);
   }
 
   // ======================================================================= status bar
@@ -928,12 +930,11 @@
     if (r.browse) {
       if (!WS.isVisible('library')) WS.activate('library', { noRender: true });
       renderAll(); LIB.ensureListed('');
-      if (!quiet) notice('Browsing <b>' + esc(r.rootPath) + '</b>. Explore, search and tag anything here. Onyx won’t reorganize a whole drive or system folder.', 'success', 7000);
+      if (!quiet) notice('Browsing <b>' + esc(r.rootPath) + '</b>. Onyx won’t reorganize a whole drive or system folder, but you can rename, copy, move and delete as in File Explorer.', 'success', 6000);
       return;
     }
     renderAll();
-    if (!quiet) notice('Opened <b>' + esc(r.vaultName) + '</b> · ' + plural(r.files.length, 'file'), 'success');
-    autoTagNotice(r);
+    if (!quiet) notice('Opened <b>' + esc(r.vaultName) + '</b> · ' + plural(r.files.length, 'file') + (r.autoTagged ? ' · tagged ' + plural(r.autoTagged, 'file') + ' from their names' : ''), 'success');
   }
   function autoTagNotice(r) {
     if (!r || !r.autoTagged) return;
@@ -1035,6 +1036,12 @@
   }
   function setStrategy(id) { S.strategy = id; store.set('strategy', id); renderSide(); if (!S.plan && S.vault && WS.isVisible('structure')) renderOne('structure'); }
   function toggleSidebar(side) { WS.toggleDock(side); }
+  // the Organize panel lives in a sidebar that stays hidden until you need it
+  function openOrganize(toggle) {
+    const k = WS.keyOf('organize');
+    if (toggle && WS.isVisible('organize') && (k === 'left' || k === 'right')) { WS.toggleDock(k); return; }
+    WS.activate('organize');
+  }
   function layoutMenu(el) {
     const r = el.getBoundingClientRect();
     const items = [{ heading: 'Layouts' }];
@@ -1085,7 +1092,7 @@
     { id: 'view-changes', name: 'View: Changes', hk: 'Mod+2', run: () => WS.activate('changes') },
     { id: 'view-graph', name: 'View: Graph view', hk: 'Mod+G', run: () => WS.activate('graph') },
     { id: 'view-files', name: 'View: Files', hk: 'Mod+Shift+E', run: () => { WS.activate('files'); focusTree($('#explorer')); } },
-    { id: 'view-organize', name: 'View: Organize panel', run: () => WS.activate('organize') },
+    { id: 'view-organize', name: 'View: Organize panel', run: () => openOrganize() },
     { id: 'view-library', name: 'View: Library', hk: 'Mod+L', run: () => LIB.showLibrary() },
     { id: 'view-tags', name: 'View: Tags panel', run: () => WS.activate('tags') },
     { id: 'quick-find', name: 'Files: Quick find', hk: 'Mod+K', run: () => LIB.quickFind() },
@@ -1100,7 +1107,15 @@
     { id: 'show-duplicates', name: 'Library: Show duplicates', run: () => LIB.setQuery('is:duplicate') },
     { id: 'show-recent', name: 'Library: Show recently changed files', run: () => LIB.setQuery('modified:<7d') },
     ...Object.entries(WS.PRESETS).map(([id, p]) => ({ id: 'layout-' + id, name: 'Layout: ' + p.name + ' (' + p.desc.toLowerCase() + ')', run: () => WS.applyPreset(id) })),
-    { id: 'undo', name: 'History: Undo last organize', hk: 'Mod+Z', run: () => confirmUndo() },
+    { id: 'undo', name: 'History: Undo last change', hk: 'Mod+Z', run: () => (window.OnyxOps ? window.OnyxOps.undo() : confirmUndo()) },
+    { id: 'undo-organize', name: 'History: Undo last organize', run: () => confirmUndo() },
+    { id: 'new-folder', name: 'Files: New folder (' + (isMac ? '⌘' : 'Ctrl+') + 'Shift+N)', run: () => { LIB.showLibrary(); window.OnyxOps.newItem('folder'); } },
+    { id: 'new-text', name: 'Files: New text document', run: () => { LIB.showLibrary(); window.OnyxOps.newItem('text'); } },
+    { id: 'rename-selected', name: 'Files: Rename (F2)', run: () => window.OnyxOps.startRename() },
+    { id: 'delete-selected', name: 'Files: Delete to Recycle Bin (Del)', run: () => window.OnyxOps.del(false) },
+    { id: 'paste', name: 'Files: Paste (' + (isMac ? '⌘' : 'Ctrl+') + 'V)', run: () => window.OnyxOps.pasteHere() },
+    { id: 'properties', name: 'Files: Properties (Alt+Enter)', run: () => window.OnyxOps.properties() },
+    { id: 'terminal', name: 'Files: Open in Terminal', run: () => window.OnyxOps && S.vault && api.fsTerminal(LIB.cwd).then(r => r && r.error && notice(esc(r.error), 'error')) },
     { id: 'rescan', name: 'Files: Reload folder from disk', hk: 'Mod+R', run: rescan },
     { id: 'search-files', name: 'Files: Search files', hk: 'Mod+Shift+F', run: () => { WS.activate('files'); $('#navSearch').classList.add('show'); $('#explorerFilter').focus(); } },
     { id: 'collapse-explorer', name: 'Files: Collapse all', run: () => { S.explorerOpen.clear(); renderExplorer(); } },
@@ -1215,7 +1230,7 @@
 
   // ======================================================================= click / context handling
   const ACTIONS = {
-    'open-folder': openFolder, 'demo': loadDemo, 'places': () => openPlaces(), 'organize': () => organize(), 'apply': confirmApply, 'undo': confirmUndo, 'rescan': rescan,
+    'toggle-organize': () => openOrganize(true), 'open-folder': openFolder, 'demo': loadDemo, 'places': () => openPlaces(), 'organize': () => organize(), 'apply': confirmApply, 'undo': confirmUndo, 'rescan': rescan,
     'discard': () => { S.plan = null; renderAll(); },
     'settings': () => openSettings(), 'settings-ai': () => openSettings('ai'), 'settings-organizing': () => openSettings('organizing'), 'settings-appearance': () => openSettings('appearance'), 'settings-rules': () => openSettings('rules'),
     'palette': () => openPalette(), 'help': () => openHelp(),
@@ -1289,11 +1304,12 @@
   // ======================================================================= drag a folder onto the window
   let dragDepth = 0;
   const hasFiles = e => e.dataTransfer && [...(e.dataTransfer.types || [])].includes('Files');
-  window.addEventListener('dragenter', e => { if (!hasFiles(e)) return; dragDepth++; $('#dropOverlay').classList.add('show'); e.preventDefault(); });
+  window.addEventListener('dragenter', e => { if (!hasFiles(e) || (window.OnyxOps && window.OnyxOps.dragging)) return; dragDepth++; $('#dropOverlay').classList.add('show'); e.preventDefault(); });
   window.addEventListener('dragover', e => { if (hasFiles(e)) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } });
   window.addEventListener('dragleave', () => { dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) $('#dropOverlay').classList.remove('show'); });
   window.addEventListener('drop', async e => {
     e.preventDefault(); dragDepth = 0; $('#dropOverlay').classList.remove('show');
+    if (window.OnyxOps && window.OnyxOps.dragging) return;
     const f = e.dataTransfer.files && e.dataTransfer.files[0];
     if (!f) return;
     const p = api.pathForFile(f);
@@ -1314,6 +1330,7 @@
     emptyState: () => emptyStateHTML(),
     openPlaces: () => openPlaces(), openFolderPath: (p) => openFolderPath(p),
     renderExplorer: () => renderExplorer(), renderAll: () => renderAll(), select: (p, from) => select(p, from), openSettings: (t) => openSettings(t),
+    organizeUndo: () => confirmUndo(), openOrganize: () => openOrganize(), rescan: () => rescan(),
   });
   function openHelp() {
     const k = id => '<kbd>' + esc(hotkeyLabel(effectiveHotkey(id)) || '—') + '</kbd>';
@@ -1415,6 +1432,7 @@
       renderAll: () => renderAll(),
       saveWorkspace: (w) => { S.settings.ui.workspace = w; persist('workspace', 'ui'); },
     }, UI().workspace);
+    if (!store.get('layoutV3', false)) { store.set('layoutV3', true); WS.declutter(); }
     applyTheme();
     renderAll();
     const recent = S.settings.ui.recent || [];

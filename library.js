@@ -237,6 +237,7 @@
     if (path === from && !L.query) { if (opts.select) { setSingle(opts.select); } return; }
     if (!opts.noHistory && path !== from) { L.hist.push(from); if (L.hist.length > 100) L.hist.shift(); L.fwd = []; }
     L.cwd = path;
+    if (BR() && C.api.fsWatch) C.api.fsWatch(path);
     if (!opts.keepQuery) { L.query = ''; const i = $('#libSearch'); if (i) i.value = ''; }
     L.sel.clear(); L.focus = null; L.anchor = null;
     const sc = $('#libScroll'); if (sc) sc.scrollTop = 0;
@@ -335,15 +336,12 @@
   }
   function build(el) {
     el.innerHTML = '<div class="lib">' +
-      '<div class="lib-toolbar">' +
-      '<div class="search-wrap lib-search">' + icon('search', 'xs') + '<input id="libSearch" class="search-input" spellcheck="false" autocomplete="off" aria-label="Search files" placeholder="Search names and #tags, or try type:pdf  size:>10mb  modified:<7d">' +
-      '<button class="clickable-icon lib-clear" data-lib="clear" aria-label="Clear search" data-tip="Clear search">' + icon('x', 'xs') + '</button></div>' +
-      '<button class="lib-tool" data-lib="sort-menu" aria-label="Sort"></button>' +
-      '<button class="lib-tool" data-lib="group-menu" aria-label="Group"></button>' +
-      '<div class="segmented lib-mode" role="group" aria-label="View"><button data-lib="mode" data-v="list" aria-label="List" data-tip="List">' + icon('list') + '</button><button data-lib="mode" data-v="grid" aria-label="Grid" data-tip="Grid">' + icon('layout-grid') + '</button></div>' +
-      '<button class="clickable-icon lib-details-btn" data-lib="details" aria-label="Details panel" data-tip="Details panel">' + icon('panel-right') + '</button>' +
-      '</div>' +
+      '<div class="lib-addr">' +
       '<div class="lib-nav" id="libNav"></div>' +
+      '<div class="search-wrap lib-search">' + icon('search', 'xs') + '<input id="libSearch" class="search-input" spellcheck="false" autocomplete="off" aria-label="Search files" placeholder="Search">' +
+      '<button class="clickable-icon lib-clear" data-lib="clear" aria-label="Clear search" data-tip="Clear search">' + icon('x', 'xs') + '</button></div>' +
+      '</div>' +
+      '<div class="lib-cmd" id="libCmd" role="toolbar" aria-label="Commands"></div>' +
       '<div class="lib-chips" id="libChips"></div>' +
       '<div class="lib-progress" id="libProgress"></div>' +
       '<div class="lib-body">' +
@@ -374,6 +372,7 @@
     // mouse back / forward buttons
     el.addEventListener('mouseup', e => { if (e.button === 3) { e.preventDefault(); back(); } else if (e.button === 4) { e.preventDefault(); forward(); } });
     el.addEventListener('keydown', e => {
+      if (window.OnyxOps && window.OnyxOps.key(e)) return;
       if (e.altKey && e.key === 'ArrowLeft') { e.preventDefault(); back(); }
       else if (e.altKey && e.key === 'ArrowRight') { e.preventDefault(); forward(); }
       else if (e.altKey && e.key === 'ArrowUp') { e.preventDefault(); up(); }
@@ -391,23 +390,17 @@
     lib.dataset.mode = u.view;
     lib.classList.toggle('no-details', !u.details);
     lib.classList.toggle('is-browsing', browsing());
-    const sortNames = { name: 'Name', modified: 'Modified', size: 'Size', type: 'Type', folder: 'Folder' };
-    const groupNames = { none: 'No grouping', folder: 'Folder', tag: 'Tag', kind: 'Kind', date: 'Date' };
-    el.querySelector('[data-lib="sort-menu"]').innerHTML = icon(u.dir === 'desc' ? 'arrow-down' : 'arrow-up', 'xs') + '<span>' + sortNames[u.sort] + '</span>';
-    el.querySelector('[data-lib="group-menu"]').innerHTML = icon('group', 'xs') + '<span>' + (u.group === 'none' ? 'Group' : groupNames[u.group]) + '</span>';
-    el.querySelector('[data-lib="group-menu"]').classList.toggle('is-on', u.group !== 'none');
-    el.querySelectorAll('[data-lib="mode"]').forEach(b => b.classList.toggle('is-active', b.dataset.v === u.view));
-    el.querySelector('[data-lib="details"]').classList.toggle('is-active', u.details);
     const input = el.querySelector('#libSearch');
     if (input.value !== L.query && document.activeElement !== input) input.value = L.query;
-    input.placeholder = 'Search ' + (L.cwd ? E.basename(L.cwd) : V().vaultName) + ': names, #tags, type:pdf, size:>10mb…';
+    input.placeholder = 'Search ' + (L.cwd ? E.basename(L.cwd) : V().vaultName);
+    input.title = 'Names and #tags. Also try type:pdf  size:>10mb  modified:<7d  is:untagged';
     el.querySelector('.lib-clear').style.visibility = L.query ? 'visible' : 'hidden';
-    renderNav(); renderChips(); renderHead(); renderProgress();
+    renderNav(); renderCmd(); renderChips(); renderHead(); renderProgress();
     buildRows(); paint(); renderFoot(); renderDetails();
   }
   function renderNav() {
     const el = $('#libNav'); if (!el) return;
-    const v = V(), u = U();
+    const v = V();
     const segs = L.cwd ? L.cwd.split('/') : [];
     let acc = '';
     const crumbs = (C.openPlaces && !v.demo ? ['<button class="crumb crumb-pc" data-lib="places" title="This PC: drives and folders">' + icon('monitor', 'xs') + '<span>This PC</span></button><span class="crumb-sep">' + icon('chevron-right', 'xs') + '</span>'] : [])
@@ -417,10 +410,34 @@
       '<button class="clickable-icon" data-lib="back" aria-label="Back" data-tip="Back (Alt+←)"' + (L.hist.length || L.cwd ? '' : ' disabled') + '>' + icon('arrow-left') + '</button>' +
       '<button class="clickable-icon" data-lib="forward" aria-label="Forward" data-tip="Forward (Alt+→)"' + (L.fwd.length ? '' : ' disabled') + '>' + icon('arrow-right') + '</button>' +
       '<button class="clickable-icon" data-lib="up" aria-label="Up one folder" data-tip="Up one folder (Alt+↑)"' + (L.cwd ? '' : ' disabled') + '>' + icon('arrow-up') + '</button>' +
-      '<div class="lib-crumbs" role="navigation" aria-label="Folder">' + crumbs.join('') + (L.query.trim() ? '<span class="crumb-search">' + icon('search', 'xs') + 'Search results</span>' : '') + '</div>' +
-      (v.browse ? '<span class="lib-browseonly" data-tip="' + esc('Browse only: Onyx won’t reorganize this location. Right-click a folder and choose “Organize this folder” to sort it.') + '">' + icon('shield-check', 'xs') + 'Browse only</span>' : '') +
-      (v.browse ? '' : '<div class="segmented lib-browse" role="group" aria-label="Show"><button data-lib="browse" data-v="folders" class="' + (u.browse !== 'flat' ? 'is-active' : '') + '" data-tip="Browse folder by folder">' + icon('folder') + '<span>Folders</span></button>' +
-      '<button data-lib="browse" data-v="flat" class="' + (u.browse === 'flat' ? 'is-active' : '') + '" data-tip="Every file inside this folder in one list">' + icon('files') + '<span>All files</span></button></div>');
+      '<button class="clickable-icon" data-lib="refresh" aria-label="Refresh" data-tip="Refresh (F5)">' + icon('refresh-cw') + '</button>' +
+      '<div class="lib-crumbs" role="navigation" aria-label="Folder">' + crumbs.join('') + (L.query.trim() ? '<span class="crumb-search">' + icon('search', 'xs') + 'Search results</span>' : '') +
+      (v.browse ? '<span class="lib-browseonly" data-tip="' + esc('Onyx won’t reorganize a whole drive or system folder. Your own changes (rename, copy, delete…) still work. Right-click a folder and choose “Organize this folder” to sort it.') + '">' + icon('shield-check', 'xs') + 'Browse only</span>' : '') + '</div>';
+  }
+  // the command bar: what Explorer has, in the same order
+  function renderCmd() {
+    const el = $('#libCmd'); if (!el) return;
+    const v = V(), u = U();
+    const n = L.sel.size, demo = !!v.demo, q = !!L.query.trim();
+    const O = window.OnyxOps;
+    const b = (op, ic, label, tip, dis, extra) => '<button class="cmd-btn' + (label ? ' has-label' : '') + (extra || '') + '" data-lib="op" data-op="' + op + '"' + (dis ? ' disabled' : '') + ' aria-label="' + esc(tip) + '" data-tip="' + esc(tip) + '">' + icon(ic) + (label ? '<span>' + esc(label) + '</span>' : '') + '</button>';
+    const sortNames = { name: 'Name', modified: 'Date', size: 'Size', type: 'Type', folder: 'Folder' };
+    const mk = C.isMac ? '⌘' : 'Ctrl+';
+    el.innerHTML =
+      b('new', 'plus', 'New', 'New folder or file', demo || q, ' cmd-new') + '<span class="cmd-sep"></span>' +
+      b('cut', 'scissors', '', 'Cut (' + mk + 'X)', demo || !n) +
+      b('copy', 'copy', '', 'Copy (' + mk + 'C)', demo || !n) +
+      b('paste', 'clipboard-paste', '', 'Paste (' + mk + 'V)', demo) +
+      b('rename', 'pencil', '', 'Rename (F2)', demo || !n) +
+      b('delete', 'trash', '', 'Delete (Del)', demo || !n) +
+      '<span class="cmd-sep"></span>' +
+      '<button class="cmd-btn has-label" data-lib="sort-menu" aria-label="Sort" data-tip="Sort and group">' + icon('arrow-up-down') + '<span>' + esc(sortNames[u.sort] || 'Sort') + '</span>' + icon('chevron-down', 'xs') + '</button>' +
+      '<button class="cmd-btn has-label" data-lib="view-menu" aria-label="View" data-tip="Layout and panes">' + icon(u.view === 'grid' ? 'layout-grid' : 'list') + '<span>View</span>' + icon('chevron-down', 'xs') + '</button>' +
+      '<button class="cmd-btn has-label" data-lib="tag-menu" aria-label="Tags" data-tip="Tag files">' + icon('tag') + '<span>Tags</span>' + icon('chevron-down', 'xs') + '</button>' +
+      '<span class="spacer"></span>' +
+      (O && O.undoLabel ? b('undo', 'undo-2', '', O.undoLabel + ' (' + mk + 'Z)', false) : '') +
+      b('more', 'more-horizontal', '', 'More', false) +
+      '<button class="cmd-btn' + (u.details ? ' is-active' : '') + '" data-lib="details" aria-label="Details pane" data-tip="Details pane">' + icon('panel-right') + '</button>';
   }
   function renderChips() {
     const el = $('#libChips'); if (!el) return;
@@ -449,6 +466,14 @@
   }
   function renderProgress() {
     const el = $('#libProgress'); if (!el) return;
+    const op = window.OnyxOps && window.OnyxOps.op;
+    if (op && !L.run) {
+      el.classList.add('show');
+      const pct = op.total && op.total.bytes ? Math.round(op.done.bytes / op.total.bytes * 100) : 0;
+      el.innerHTML = '<span class="spinner"></span><span>' + (op.mode === 'move' ? 'Moving' : 'Copying') + ' · ' + (op.total ? Math.min(op.done.files, op.total.files) + ' of ' + plural(op.total.files, 'file') + ' · ' + C.fmt(op.done.bytes) + ' of ' + C.fmt(op.total.bytes) : C.fmt(op.done.bytes)) + '</span>' +
+        '<div class="lp-bar"><div style="width:' + pct + '%"></div></div><a class="mod-link" data-lib="cancel-op" tabindex="0">Cancel</a>';
+      return;
+    }
     if (!L.run) { el.innerHTML = ''; el.classList.remove('show'); return; }
     el.classList.add('show');
     const pct = L.run.of ? Math.round((L.run.batch - 1) / L.run.of * 100) : 0;
@@ -569,7 +594,10 @@
     let i = firstVisible(top);
     let h = '';
     for (; i < L.rows.length && L.offsets[i] < bottom; i++) h += rowHTML(L.rows[i], L.offsets[i]);
+    const O = window.OnyxOps;
+    if (O) O.beforePaint();
     canvas.innerHTML = h;
+    if (O) O.afterPaint();
   }
 
   // ------------------------------------------------------------------ details panel
@@ -711,7 +739,7 @@
       const p = el.dataset.path, sel = L.sel.has(p);
       el.classList.toggle('is-selected', sel); el.classList.toggle('is-focus', L.focus === p); el.setAttribute('aria-selected', sel);
     });
-    renderFoot(); renderDetails();
+    renderFoot(); renderDetails(); renderCmd();
   }
   function indexOfPath(p) { return (L.order || L.files).findIndex(f => f.path === p); }
   function ensureVisible(path) {
@@ -764,12 +792,17 @@
     const r = e.target.closest('.lib-row, .lib-tile');
     const ch = e.target.closest('.tag-chip[data-tag]');
     if (ch) { e.preventDefault(); e.stopPropagation(); C.showMenu(tagMenuItems(ch.dataset.tag), e.clientX, e.clientY); return; }
-    if (!r) return;
+    if (!r) {
+      // empty space in the list: Explorer's background menu
+      if (e.target.closest('#libScroll') && window.OnyxOps) { e.preventDefault(); e.stopPropagation(); L.sel.clear(); L.focus = null; afterSelect(false); C.showMenu(window.OnyxOps.backgroundMenu(), e.clientX, e.clientY); }
+      return;
+    }
     e.preventDefault(); e.stopPropagation();
     if (!L.sel.has(r.dataset.path)) { L.sel = new Set([r.dataset.path]); L.focus = r.dataset.path; L.anchor = r.dataset.path; afterSelect(false); }
-    if (r.dataset.dir) { C.showMenu(dirMenuItems(r.dataset.path), e.clientX, e.clientY); return; }
-    C.showMenu(fileMenuItems(), e.clientX, e.clientY);
+    menuAt = { x: e.clientX, y: e.clientY };
+    C.showMenu(window.OnyxOps ? window.OnyxOps.itemMenu() : r.dataset.dir ? dirMenuItems(r.dataset.path) : fileMenuItems(), e.clientX, e.clientY);
   }
+  let menuAt = { x: 200, y: 200 };
   function onKey(e) {
     const mod = e.ctrlKey || e.metaKey;
     const list = L.order || L.files;
@@ -800,7 +833,7 @@
       afterSelect();
       return;
     }
-    if (mod && k.toLowerCase() === 'a') { e.preventDefault(); e.stopPropagation(); L.sel = new Set(L.files.map(f => f.path)); afterSelect(false); return; }
+    if (mod && k.toLowerCase() === 'a') { e.preventDefault(); e.stopPropagation(); selectAll(); return; }
     if (k === ' ' && L.focus && mod) { e.preventDefault(); if (L.sel.has(L.focus)) L.sel.delete(L.focus); else L.sel.add(L.focus); afterSelect(false); return; }
     if (k === 'Enter' && L.focus) { e.preventDefault(); e.stopPropagation(); if (dirBy(L.focus) && !fileBy(L.focus)) go(L.focus); else if (e.shiftKey) reveal(L.focus); else openFile(L.focus); return; }
     if (k === 'Backspace' && !mod) { e.preventDefault(); e.stopPropagation(); back(); return; }
@@ -810,7 +843,8 @@
       e.preventDefault();
       if (!L.sel.size && L.focus) L.sel.add(L.focus);
       const r = L.focus && rowEl(L.focus); const b = r ? r.getBoundingClientRect() : $('#libScroll').getBoundingClientRect();
-      C.showMenu(fileMenuItems(), b.left + 30, b.bottom, { keyboard: true });
+      menuAt = { x: b.left + 30, y: b.bottom };
+      C.showMenu(window.OnyxOps ? (L.sel.size ? window.OnyxOps.itemMenu() : window.OnyxOps.backgroundMenu()) : fileMenuItems(), b.left + 30, b.bottom, { keyboard: true });
       return;
     }
     if (!mod && !e.altKey && k.length === 1 && /\S/.test(k)) {
@@ -823,12 +857,12 @@
   function onDragStart(e) {
     const r = e.target.closest('.lib-row, .lib-tile');
     if (!r) return;
-    if (r.dataset.dir) { e.preventDefault(); return; }
     if (!L.sel.has(r.dataset.path)) { L.sel = new Set([r.dataset.path]); L.focus = r.dataset.path; afterSelect(false); }
-    const paths = [...L.sel].filter(p => fileBy(p));
+    const paths = selection();
+    if (window.OnyxOps && window.OnyxOps.dragStart(e, paths)) return;
     e.dataTransfer.setData('application/x-onyx-files', JSON.stringify(paths));
     e.dataTransfer.setData('text/plain', paths.join('\n'));
-    e.dataTransfer.effectAllowed = 'copyLink';
+    e.dataTransfer.effectAllowed = 'all';
     const ghost = document.createElement('div');
     ghost.className = 'drag-ghost';
     ghost.textContent = paths.length === 1 ? E.basename(paths[0]) : plural(paths.length, 'file');
@@ -856,13 +890,8 @@
     else if (name === 'search-everywhere') { const q = L.query; L.hist.push(L.cwd); L.fwd = []; L.cwd = ''; L.query = q; refresh(); renderTagsPanel(); }
     else if (name === 'details') setPref('details', !u.details);
     else if (name === 'sort') { if (u.sort === el.dataset.k) setPref('dir', u.dir === 'asc' ? 'desc' : 'asc'); else { C.setUi('library', 'dir', el.dataset.k === 'name' || el.dataset.k === 'folder' || el.dataset.k === 'type' ? 'asc' : 'desc'); setPref('sort', el.dataset.k); } }
-    else if (name === 'sort-menu') {
-      const b = el.getBoundingClientRect();
-      const items = [{ heading: 'Sort by' }];
-      for (const [k, l, d] of [['name', 'Name', 'asc'], ['modified', 'Date modified', 'desc'], ['size', 'Size', 'desc'], ['type', 'Type', 'asc'], ['folder', 'Folder', 'asc']]) items.push({ label: l, check: u.sort === k, action: () => { C.setUi('library', 'dir', d); setPref('sort', k); } });
-      items.push('sep', { label: u.dir === 'asc' ? 'Ascending' : 'Descending', sub: 'click to flip', icon: u.dir === 'asc' ? 'arrow-up' : 'arrow-down', action: () => setPref('dir', u.dir === 'asc' ? 'desc' : 'asc') });
-      C.showMenu(items, b.left, b.bottom + 4);
-    } else if (name === 'group-menu') {
+    else if (name === 'sort-menu') sortMenu(el);
+    else if (name === 'group-menu') {
       const b = el.getBoundingClientRect();
       const items = [{ heading: 'Group by' }];
       for (const [k, l, ic] of [['none', 'Nothing', 'list'], ['tag', 'Tag', 'tag'], ['folder', 'Folder', 'folder'], ['kind', 'Kind', 'layers'], ['date', 'Date modified', 'calendar']]) items.push({ label: l, icon: ic, check: u.group === k, action: () => { L.collapsed.clear(); setPref('group', k); } });
@@ -879,6 +908,51 @@
     else if (name === 'retag-ai-sel') autoTag('ai', { paths: selFiles().map(f => f.path), retag: true });
     else if (name === 'tag-rules-sel') autoTag('rules', { paths: [...L.sel] });
     else if (name === 'cancel-run') { C.api.tagsCancel(); C.notice('Stopping after the current batch…', '', 2500); }
+    else if (name === 'cancel-op') { if (window.OnyxOps) window.OnyxOps.cancelOp(); }
+    else if (name === 'refresh') reloadNow();
+    else if (name === 'view-menu') viewMenu(el);
+    else if (name === 'tag-menu') autoTagMenu(el, true);
+    else if (name === 'op') {
+      const O = window.OnyxOps; if (!O) return;
+      const op = el.dataset.op;
+      if (op === 'new') O.newMenu(el);
+      else if (op === 'cut') O.toClipboard('move');
+      else if (op === 'copy') O.toClipboard('copy');
+      else if (op === 'paste') O.pasteHere();
+      else if (op === 'rename') O.startRename();
+      else if (op === 'delete') O.del(e && e.shiftKey);
+      else if (op === 'undo') O.undo();
+      else if (op === 'more') O.moreMenu(el);
+    }
+  }
+  function sortMenu(el) {
+    const u = U();
+    const b = el ? el.getBoundingClientRect() : { left: menuAt.x, bottom: menuAt.y - 4 };
+    const items = [{ heading: 'Sort by' }];
+    for (const [k, l, d] of [['name', 'Name', 'asc'], ['modified', 'Date modified', 'desc'], ['size', 'Size', 'desc'], ['type', 'Type', 'asc'], ['folder', 'Folder', 'asc']]) items.push({ label: l, check: u.sort === k, action: () => { C.setUi('library', 'dir', d); setPref('sort', k); } });
+    items.push({ label: u.dir === 'asc' ? 'Ascending' : 'Descending', sub: 'flip', icon: u.dir === 'asc' ? 'arrow-up' : 'arrow-down', action: () => setPref('dir', u.dir === 'asc' ? 'desc' : 'asc') });
+    items.push({ heading: 'Group by' });
+    for (const [k, l, ic] of [['none', 'Nothing', 'list'], ['tag', 'Tag', 'tag'], ['folder', 'Folder', 'folder'], ['kind', 'Kind', 'layers'], ['date', 'Date modified', 'calendar']]) items.push({ label: l, icon: ic, check: u.group === k, action: () => { L.collapsed.clear(); setPref('group', k); } });
+    C.showMenu(items, b.left, b.bottom + 4);
+  }
+  function viewMenu(el) {
+    const u = U();
+    const b = el ? el.getBoundingClientRect() : { left: menuAt.x, bottom: menuAt.y - 4 };
+    const items = [{ heading: 'Layout' },
+      { label: 'List', icon: 'list', check: u.view !== 'grid', action: () => setPref('view', 'list') },
+      { label: 'Grid with previews', icon: 'layout-grid', check: u.view === 'grid', action: () => setPref('view', 'grid') }];
+    if (!BR()) items.push({ heading: 'Show' },
+      { label: 'Folder by folder', icon: 'folder', check: u.browse !== 'flat', action: () => { cache = null; setPref('browse', 'folders'); } },
+      { label: 'Every file inside, in one list', icon: 'files', check: u.browse === 'flat', action: () => { cache = null; setPref('browse', 'flat'); } });
+    items.push('sep',
+      { label: 'Details pane', icon: 'panel-right', check: u.details, action: () => setPref('details', !u.details) },
+      { label: 'Thumbnails', icon: 'image', check: u.thumbs, action: () => { L.thumbs.clear(); setPref('thumbs', !u.thumbs); } });
+    C.showMenu(items, b.left, b.bottom + 4);
+  }
+  function reloadNow() {
+    const v = V(); if (!v) return;
+    if (v.browse) { const k = L.cwd.toLowerCase(); L.loaded.delete(k); L.listErr.delete(k); ensureListed(L.cwd); C.notice('Refreshed', '', 1200); return; }
+    if (C.rescan) C.rescan();
   }
 
   // ------------------------------------------------------------------ actions on files
@@ -946,6 +1020,35 @@
     return items;
   }
   function hk(k) { return k; }
+  // "Tags ›" in the right-click menu
+  function tagMenu(p, dir) {
+    let items;
+    if (dir) {
+      const n = filesInside(p).length;
+      items = [{ heading: 'Files inside ' + E.basename(p) },
+        { label: 'Tag all ' + plural(n, 'file') + '…', icon: 'tag', action: () => tagEditor(filesInside(p)) },
+        { label: 'Suggest tags with AI', icon: 'sparkles', action: () => autoTag('ai', { paths: filesInside(p) }) },
+        { label: 'Re-tag with AI', icon: 'refresh-cw', sub: 'replaces automatic tags', action: () => autoTag('ai', { paths: filesInside(p), retag: true }) },
+        'sep',
+        { label: 'Search in this folder', icon: 'search', action: () => { go(p); const i = $('#libSearch'); if (i) i.focus(); } }];
+      if (!BR()) items.push({ label: 'Every file inside, in one list', icon: 'files', action: () => { go(p); setPref('browse', 'flat'); } });
+    } else {
+      const files = selFiles();
+      const one = files.length === 1 ? files[0] : null;
+      items = [{ heading: one ? 'Tags for ' + one.name : 'Tags for ' + plural(files.length, 'file') },
+        { label: 'Add tags…', icon: 'tag', sub: '#', action: () => tagEditor(files.map(f => f.path)) }];
+      const present = new Map();
+      for (const f of files) for (const t of tagsOf(f.path)) present.set(t, (present.get(t) || 0) + 1);
+      for (const t of [...present.keys()].slice(0, 6)) items.push({ label: 'Remove #' + t, icon: 'x', action: () => removeTag(files.map(f => f.path), t) });
+      items.push('sep',
+        { label: 'Suggest tags with AI', icon: 'sparkles', action: () => autoTag('ai', { paths: files.map(f => f.path) }) },
+        { label: 'Re-tag with AI', icon: 'refresh-cw', sub: 'replaces automatic tags', action: () => autoTag('ai', { paths: files.map(f => f.path), retag: true }) },
+        { label: 'Suggest tags from names', icon: 'zap', action: () => autoTag('rules', { paths: files.map(f => f.path) }) });
+      if (present.size) items.push({ label: 'Remove automatic tags', icon: 'rotate-ccw', action: () => clearAuto(files.map(f => f.path)) });
+      if (one) items.push('sep', { label: 'More like this', icon: 'search', sub: '.' + (one.extension || '?'), action: () => setQuery(one.extension ? 'type:' + one.extension : 'kind:other') });
+    }
+    C.showMenu(items, menuAt.x, menuAt.y);
+  }
   function filesInside(d) { const low = d.toLowerCase() + '/'; return V().files.filter(f => f.path.toLowerCase().startsWith(low)).map(f => f.path); }
   function revealDir(d) { if (V().demo) { C.notice('The demo vault only exists in memory.', 'warn', 2500); return; } C.api.reveal(d); }
   function organizeDir(d) { if (C.openFolderPath) C.openFolderPath(absPath(d)); }
@@ -1044,19 +1147,30 @@
     else if (!r.added) C.notice('Checked ' + plural(r.checked, 'file') + '. No new tags found' + (mode === 'rules' ? ' in their names. Try AI tagging for smarter tags.' : '.'), '', 5000);
     else C.notice('Added <b>' + plural(r.added, 'tag') + '</b> to ' + plural(r.files, 'file') + (r.model ? ' with ' + esc(r.model) : '') + (r.cancelled ? ' before stopping' : '') + (r.failedBatches ? ' (' + r.failedBatches + ' batch' + (r.failedBatches > 1 ? 'es' : '') + ' failed)' : '') + (r.capped ? '. Onyx tags up to 3,000 files per run; run it again for the rest.' : '.'), 'success', 6000);
   }
-  function autoTagMenu(el) {
+  function autoTagMenu(el, fromBar) {
     const v = V();
     const b = el.getBoundingClientRect();
     const untagged = v ? v.files.filter(f => !tagsOf(f.path).length).length : 0;
     const prov = C.S.settings && C.S.settings.providers ? (C.S.settings.providers[C.S.settings.ai.provider] || {}).label : '';
-    const items = [{ heading: 'Tag automatically' }];
+    const items = [];
+    const sf = selFiles();
+    if (fromBar) items.push({ label: sf.length ? 'Add tags to ' + plural(sf.length, 'selected file') + '…' : 'Add tags… (select files first)', icon: 'tag', sub: '#', action: () => tagEditor() }, 'sep');
+    if (v && v.browse) {
+      items.push({ heading: 'Tag automatically' });
+      if (sf.length) items.push({ label: 'Tag the ' + plural(sf.length, 'selected file') + ' with AI', icon: 'sparkles', action: () => autoTag('ai', { paths: sf.map(f => f.path) }) }, { label: 'Re-tag them with AI', icon: 'refresh-cw', action: () => autoTag('ai', { paths: sf.map(f => f.path), retag: true }) });
+      else items.push({ label: 'Select files to tag them with AI', icon: 'sparkles', action: () => C.notice('Select files first. Whole drives are too big to tag at once.', '', 3000) });
+      items.push('sep', { label: 'Tagging settings…', icon: 'settings', action: () => C.openSettings('library') });
+      C.showMenu(items, fromBar ? b.left : b.right - 300, b.bottom + 4);
+      return;
+    }
+    items.push({ heading: 'Tag automatically' });
     items.push({ label: 'Tag untagged files with AI', icon: 'sparkles', sub: prov ? 'using ' + prov : '', action: () => autoTag('ai', { scope: 'untagged' }) });
     items.push({ label: 'Re-tag everything with AI', icon: 'sparkles', sub: v ? plural(v.files.length, 'file') : '', action: () => C.confirmModal('Re-tag every file with AI?', '<p>Onyx sends the names of <b>' + plural(v.files.length, 'file') + '</b> to ' + esc(prov || 'your AI provider') + ' and adds the tags it suggests. Your own tags stay, and tags you removed won’t come back.</p>', 'Tag with AI', () => autoTag('ai', { scope: 'all' })) });
     items.push({ label: 'Suggest tags from names (offline)', icon: 'zap', sub: untagged + ' untagged', action: () => autoTag('rules', { scope: 'all' }) });
     if (L.sel.size) items.push('sep', { label: 'Tag the ' + plural(L.sel.size, 'selected file') + ' with AI', icon: 'sparkles', action: () => autoTag('ai', { paths: [...L.sel] }) });
     items.push('sep', { label: 'Remove all automatic tags…', icon: 'rotate-ccw', action: () => C.confirmModal('Remove automatic tags?', '<p>Removes every tag Onyx or AI added. Tags you added yourself stay. Onyx won’t add the removed tags again.</p>', 'Remove', () => clearAuto(null), true) });
     items.push({ label: 'Tagging settings…', icon: 'settings', action: () => C.openSettings('library') });
-    C.showMenu(items, b.right - 300, b.bottom + 4);
+    C.showMenu(items, fromBar ? b.left : b.right - 300, b.bottom + 4);
   }
 
   // ------------------------------------------------------------------ saved searches
@@ -1139,9 +1253,7 @@
     const head = $('#tagsHeader');
     if (head) head.innerHTML =
       '<button class="clickable-icon" data-tp="auto" data-tip="Tag automatically" aria-label="Tag automatically">' + icon('sparkles') + '</button>' +
-      '<button class="clickable-icon" data-tp="quick" data-tip="Quick find" data-cmd="quick-find" aria-label="Quick find">' + icon('search') + '</button>' +
-      '<button class="clickable-icon" data-tp="sort" data-tip="' + (U().tagSort === 'name' ? 'Sorted by name' : 'Sorted by count') + '" aria-label="Sort tags">' + icon('arrow-up-down') + '</button>' +
-      '<button class="clickable-icon" data-tp="library" data-tip="Open Library" aria-label="Open Library">' + icon('library') + '</button>';
+      '<button class="clickable-icon" data-tp="sort" data-tip="' + (U().tagSort === 'name' ? 'Tags sorted by name' : 'Tags sorted by count') + '" aria-label="Sort tags">' + icon('arrow-up-down') + '</button>';
     if (!v) { el.innerHTML = '<div class="nav-empty">No folder open.<br><a class="mod-link" data-action="open-folder">Open a folder</a></div>'; return; }
     const prevFilter = el.querySelector('#tagFilter');
     const hadFocus = prevFilter && document.activeElement === prevFilter;
@@ -1158,14 +1270,15 @@
       h += '<div class="tp-cta"><div class="tp-cta-title">' + icon('sparkles') + plural(untagged, 'file') + ' without tags</div><div class="tp-cta-sub">Let AI read the names and tag them, so you can find anything by topic, project or purpose.</div>' +
         '<div class="tp-cta-row"><button class="btn small mod-cta" data-tp="ai">Tag with AI</button><button class="btn small" data-tp="rules">Offline</button></div></div>';
     }
-    h += '<div class="tp-section"><div class="tp-title">Library</div>' +
-      '<div class="tp-item' + (!q && !L.cwd ? ' is-active' : '') + '" data-tp="home" tabindex="0" role="button">' + icon('folder-open') + '<span class="tp-label">Browse folders</span><span class="tp-count">' + (br ? '' : v.files.length) + '</span></div>' +
+    h += '<div class="tp-section"><div class="tp-title">Browse</div>' +
+      (!v.demo && C.openPlaces ? '<div class="tp-item" data-tp="places" tabindex="0" role="button">' + icon('monitor') + '<span class="tp-label">This PC</span><span class="tp-count"></span></div>' : '') +
+      '<div class="tp-item' + (!q && !L.cwd ? ' is-active' : '') + '" data-tp="home" tabindex="0" role="button">' + icon(br ? 'hard-drive' : 'folder-open') + '<span class="tp-label">' + esc(v.vaultName) + '</span><span class="tp-count">' + (br ? '' : v.files.length) + '</span></div>' +
       item('clock', 'Changed this week', 'modified:<7d', br ? 0 : v.files.filter(f => now - f.lastModified <= 7 * DAY).length) +
       (br ? '' : item('inbox', 'Untagged', 'is:untagged', untagged) + item('copy', 'Duplicates', 'is:duplicate', dupSet().size)) +
       item('hard-drive', 'Large files', 'size:>100mb', br ? 0 : v.files.filter(f => f.size >= 100 * 1048576).length) + '</div>' +
-      (br ? '<div class="tp-note">' + icon('shield-check', 'xs') + '<span><b>Browse only.</b> Searches here look through the folder you’re in and everything below it.</span></div>' : '');
+      '';
     const saved = tagState().saved || [];
-    h += '<div class="tp-section"><div class="tp-title">Saved searches<span class="spacer"></span>' + (q && !saved.some(s => s.query.trim() === q) ? '<button class="clickable-icon" data-tp="save" data-tip="Save current search" aria-label="Save current search">' + icon('plus') + '</button>' : '') + '</div>' +
+    if (saved.length) h += '<div class="tp-section"><div class="tp-title">Saved searches<span class="spacer"></span>' + (q && !saved.some(s => s.query.trim() === q) ? '<button class="clickable-icon" data-tp="save" data-tip="Save current search" aria-label="Save current search">' + icon('plus') + '</button>' : '') + '</div>' +
       (saved.length ? saved.map((s, i) => {
         const r = TG.parseQuery(s.query); const ctx = { now, dups: br ? null : dupSet() };
         const n = br ? '' : v.files.filter(f => TG.matchFile(f, tagsOf(f.path), r, ctx)).length;
@@ -1174,7 +1287,7 @@
     const kinds = new Map();
     for (const f of v.files) { const k = E.typeGroup(f.extension); kinds.set(k, (kinds.get(k) || 0) + 1); }
     const kindRows = TG.KINDS.filter(([g]) => br ? g !== 'Other' : kinds.get(g)).map(([g, alias, label]) => item(window.fileIconName(alias === '3d' ? 'obj' : ({ image: 'jpg', document: 'pdf', video: 'mp4', audio: 'mp3', code: 'js', archive: 'zip', installer: 'exe', design: 'psd', ebook: 'epub', font: 'ttf' })[alias] || ''), label, 'kind:' + alias, kinds.get(g)));
-    if (kindRows.length) h += '<div class="tp-section' + (store.get('tp.kinds', true) ? '' : ' is-collapsed') + '"><div class="tp-title tp-toggle" data-tp="toggle-kinds">' + icon('chevron-down', 'xs') + 'Kinds</div><div class="tp-body">' + kindRows.join('') + '</div></div>';
+    if (kindRows.length) h += '<div class="tp-section' + (store.get('tp.kinds2', false) ? '' : ' is-collapsed') + '"><div class="tp-title tp-toggle" data-tp="toggle-kinds">' + icon('chevron-down', 'xs') + 'Kinds</div><div class="tp-body">' + kindRows.join('') + '</div></div>';
     const counts = new Map();
     if (br) { for (const e of Object.values(tagState().files)) for (const t of e.t || []) counts.set(t, (counts.get(t) || 0) + 1); }
     else for (const f of v.files) for (const t of tagsOf(f.path)) counts.set(t, (counts.get(t) || 0) + 1);
@@ -1212,7 +1325,8 @@
       else if (k === 'rules') autoTag('rules', { scope: 'all' });
       else if (k === 'cancel') C.api.tagsCancel();
       else if (k === 'save') { showLibrary(); saveSearch(); }
-      else if (k === 'toggle-kinds') { store.set('tp.kinds', !store.get('tp.kinds', true)); renderTagsPanel(); }
+      else if (k === 'toggle-kinds') { store.set('tp.kinds2', !store.get('tp.kinds2', false)); renderTagsPanel(); }
+      else if (k === 'places') { if (C.openPlaces) C.openPlaces(); }
       return true;
     }
     const t = e.target.closest('.tp-tag');
@@ -1331,9 +1445,57 @@
   }
 
   // ------------------------------------------------------------------ public API
+  function selection() {
+    const order = (L.order || []).map(f => f.path).filter(p => L.sel.has(p));
+    for (const p of L.sel) if (!order.includes(p)) order.push(p);
+    return order;
+  }
+  function selectPaths(paths) {
+    const list = (paths || []).filter(Boolean);
+    const low = new Set(list.map(p => p.toLowerCase()));
+    const real = (L.order || []).filter(f => low.has(f.path.toLowerCase())).map(f => f.path);
+    L.sel = new Set(real.length ? real : list);
+    const last = real[real.length - 1] || list[list.length - 1] || null;
+    L.focus = last; L.anchor = last;
+    afterSelect();
+  }
+  function selectAll() { L.sel = new Set((L.order || []).map(f => f.path)); afterSelect(false); }
+  function invertSelection() { L.sel = new Set((L.order || []).map(f => f.path).filter(p => !L.sel.has(p))); afterSelect(false); }
+  // after deleting: Explorer selects the item that took the deleted one's place
+  function neighbourAfter(paths) {
+    const list = (L.order || []).map(f => f.path), gone = new Set(paths);
+    const idx = list.findIndex(p => gone.has(p));
+    if (idx < 0) return null;
+    for (let i = idx; i < list.length; i++) if (!gone.has(list[i])) return list[i];
+    for (let i = idx - 1; i >= 0; i--) if (!gone.has(list[i])) return list[i];
+    return null;
+  }
+  function dropDirs(rels) {
+    const v = V(); if (!v) return;
+    const lows = rels.map(r => r.toLowerCase());
+    const under = p => { const l = p.toLowerCase(); return lows.some(r => l === r || l.startsWith(r + '/')); };
+    v.files = v.files.filter(f => !under(f.path));
+    v.dirs = v.dirs.filter(d => !under(d.path));
+    for (const k of [...L.loaded]) if (under(k)) L.loaded.delete(k);
+    if (under(L.cwd)) { let c = L.cwd; while (c && under(c)) c = E.dirname(c); L.cwd = c; }
+  }
+  function relist(dirs) {
+    const v = V(); if (!v || !v.browse) return;
+    for (const d of dirs) { const k = (d || '').toLowerCase(); if (L.loaded.has(k)) { L.loaded.delete(k); ensureListed(d); } }
+  }
+  function reveal(path) { L.focus = path; ensureVisible(path); paint(); }
+  function focusList() { const sc = $('#libScroll'); if (sc) sc.focus({ preventScroll: true }); }
+  function revealPath(p) { if (V().demo) { C.notice('The demo vault only exists in memory.', 'warn', 2500); return; } C.api.reveal(p || ''); }
   function init(ctx) {
     C = ctx;
     C.api.onTagProgress(p => { if (L.run) { L.run.batch = p.batch; L.run.of = p.of; renderProgress(); renderTagsPanel(); } });
+    if (window.OnyxOps) window.OnyxOps.init(ctx, {
+      selection, selectPaths, selectAll, invertSelection, neighbourAfter, dropDirs, relist, reveal, focusList, revealPath,
+      mergeListing: r => { mergeListing(r); cache = null; }, changed: () => { cache = null; L.statsFor = null; changed(); },
+      renderCmd, renderProgress, rowEl, dirBy, fileBy, absPath, go, openFile, organizeDir, addTags, tagMenu, viewMenu, sortMenu, reloadNow,
+      cwd: () => L.cwd, query: () => L.query.trim(), focus: () => L.focus,
+      showDetails: () => { if (!U().details) setPref('details', true); },
+    });
   }
   window.OnyxLibrary = {
     init, renderLibrary, renderTagsPanel, refresh, quickFind, go, back, forward, up, revealFile, ensureListed, isListed,

@@ -14,6 +14,7 @@
   const ALL = Object.keys(VIEWS);
   const R = (tabs, active) => ({ tabs, active: active || tabs[0] || null, collapsed: false });
   const PRESETS = {
+    explorer: { name: 'Explorer', desc: 'The Library in the middle, folders and tags on the left, Organize tucked away until you need it', ws: () => ({ left: R(['tags', 'files']), right: Object.assign(R(['organize']), { collapsed: true }), main: [R(['library'])], split: 'row', ratio: 0.5, hidden: ['structure', 'changes', 'graph'] }) },
     classic: { name: 'Classic', desc: 'Tags and files left, Organize right, views in the middle', ws: () => ({ left: R(['tags', 'files']), right: R(['organize']), main: [R(['library', 'structure', 'changes', 'graph'])], split: 'row', ratio: 0.5, hidden: [] }) },
     explore: { name: 'Explore', desc: 'Library front and center, organizing tucked away', ws: () => ({ left: R(['tags', 'files']), right: Object.assign(R(['organize']), { collapsed: true }), main: [R(['library', 'graph', 'structure', 'changes'])], split: 'row', ratio: 0.5, hidden: [] }) },
     swapped: { name: 'Swapped', desc: 'Organize on the left, files and tags on the right', ws: () => ({ left: R(['organize']), right: R(['tags', 'files']), main: [R(['library', 'structure', 'changes', 'graph'])], split: 'row', ratio: 0.5, hidden: [] }) },
@@ -31,7 +32,7 @@
   // ------------------------------------------------------------------ model
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
   function normalize(w) {
-    w = w && typeof w === 'object' ? clone(w) : PRESETS.classic.ws();
+    w = w && typeof w === 'object' ? clone(w) : PRESETS.explorer.ws();
     for (const k of ['left', 'right']) w[k] = Object.assign(R([]), w[k] || {});
     w.main = Array.isArray(w.main) && w.main.length ? w.main.slice(0, 2).map(p => Object.assign(R([]), p)) : [R([])];
     w.hidden = Array.isArray(w.hidden) ? w.hidden : [];
@@ -116,6 +117,18 @@
     r.collapsed = !r.collapsed; save(); C.renderAll();
   }
   function applyPreset(id) { ws = normalize(PRESETS[id].ws()); save(); C.renderAll(); C.notice('Layout: ' + PRESETS[id].name, '', 1600); }
+  // fewer things on screen: Organize's panel folds away, the plan views only appear when there's a plan
+  function declutter() {
+    for (const side of ['left', 'right']) if (ws[side].tabs.length === 1 && ws[side].tabs[0] === 'organize') ws[side].collapsed = true;
+    for (const v of ['structure', 'changes', 'graph']) {
+      const k = keyOf(v);
+      if (k && k.startsWith('main')) { removeFrom(v); if (!ws.hidden.includes(v)) ws.hidden.push(v); }
+    }
+    tidyPanes();
+    if (!keyOf('library')) { ws.hidden = ws.hidden.filter(x => x !== 'library'); ws.main[0].tabs.unshift('library'); }
+    const k = keyOf('library'); if (k && k.startsWith('main')) region(k).active = 'library';
+    save();
+  }
   function swapSides() { const l = ws.left; ws.left = ws.right; ws.right = l; save(); C.renderAll(); }
 
   // ------------------------------------------------------------------ render
@@ -285,7 +298,7 @@
     VIEWS, PRESETS,
     init(ctx, saved) { C = ctx; ws = normalize(saved); },
     get: () => ws,
-    render, isVisible, activate, moveView, closeView, toggleDock, applyPreset, swapSides, keyOf, tabMenuItems,
+    render, isVisible, activate, moveView, closeView, toggleDock, applyPreset, swapSides, keyOf, tabMenuItems, declutter,
     isHidden: v => ws.hidden.includes(v),
   };
 })();

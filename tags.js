@@ -515,6 +515,56 @@
     }
     return n;
   }
+  // A file or folder was renamed or moved inside the folder: its tags (and those of everything inside it) go with it.
+  function movePaths(db, moves) {
+    db = cleanDb(db);
+    const out = [];
+    const keys = Object.keys(db.files);
+    for (const mv of moves) {
+      const from = String(mv.from).replace(/\\/g, '/'), to = String(mv.to).replace(/\\/g, '/');
+      const fl = from.toLowerCase();
+      for (const k of keys) {
+        const kl = k.toLowerCase();
+        if (kl === fl) out.push({ from: k, to });
+        else if (kl.startsWith(fl + '/')) out.push({ from: k, to: to + k.slice(from.length) });
+      }
+    }
+    return applyMoves(db, out);
+  }
+  // Copies keep the tags you gave the original (not the automatic ones: those are worked out again for the copy).
+  function copyPaths(db, pairs) {
+    db = cleanDb(db);
+    const idx = index(db);
+    let n = 0;
+    const keys = Object.keys(db.files);
+    for (const pr of pairs) {
+      const from = String(pr.from).replace(/\\/g, '/'), to = String(pr.to).replace(/\\/g, '/');
+      const fl = from.toLowerCase();
+      for (const k of keys) {
+        const kl = k.toLowerCase();
+        const dest = kl === fl ? to : kl.startsWith(fl + '/') ? to + k.slice(from.length) : null;
+        if (dest == null) continue;
+        const e = db.files[k];
+        const mine = (e.t || []).filter(t => !(e.a || []).includes(t));
+        if (!mine.length) continue;
+        const d = tidy(entryFor(db, idx, dest, true));
+        for (const t of mine) if (!d.t.includes(t)) d.t.push(t);
+        n++;
+      }
+    }
+    return n;
+  }
+  // Deleted files and folders: forget them right away (no grace period, they're in the Recycle Bin)
+  function forgetPaths(db, paths) {
+    db = cleanDb(db);
+    let n = 0;
+    const low = paths.map(p => String(p).replace(/\\/g, '/').toLowerCase());
+    for (const k of Object.keys(db.files)) {
+      const kl = k.toLowerCase();
+      if (low.some(p => kl === p || kl.startsWith(p + '/'))) { delete db.files[k]; n++; }
+    }
+    return n;
+  }
   function edit(db, paths, add, remove) {
     db = cleanDb(db);
     const idx = index(db);
@@ -693,6 +743,6 @@
   return {
     normTag, tagLabel, tagFolder, hashColor, autoTags, aiTagBatches, parseAiTags, AI_TAG_SYSTEM,
     parseQuery, isEmptyQuery, matchFile, duplicateSet, tokenize, KINDS, tagMatches,
-    emptyDb, cleanDb, reconcile, applyMoves, edit, applyAuto, clearAuto, renameTag, deleteTag, view, viewAll, needsAuto, aiOrder, primaryTag, syncRules, removeAutoTag, guardCleanup, guardTags, generalizeTags, cleanSuggested, audioTags,
+    emptyDb, cleanDb, reconcile, applyMoves, movePaths, copyPaths, forgetPaths, edit, applyAuto, clearAuto, renameTag, deleteTag, view, viewAll, needsAuto, aiOrder, primaryTag, syncRules, removeAutoTag, guardCleanup, guardTags, generalizeTags, cleanSuggested, audioTags,
   };
 });
