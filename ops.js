@@ -35,7 +35,15 @@
     const v = V(); if (!v || !r) return;
     if (r.vault) {
       v.files = r.vault.files; v.dirs = r.vault.dirs; v.tags = r.vault.tags; v.undo = r.vault.undo;
-      if (C.S.plan) { C.S.plan = null; C.renderAll(); }
+      if (C.S.plan && opts.keepPlan) {
+        // a file changed elsewhere while a plan is up: keep the plan, drop moves for files that are gone
+        const have = new Set(r.vault.files.map(f => f.path.toLowerCase()));
+        const before = C.S.plan.items.length;
+        C.S.plan.items = C.S.plan.items.filter(it => have.has(String(it.source).toLowerCase()));
+        if (!C.S.plan.items.length) C.S.plan = null;
+        C.renderAll();
+        if (C.S.plan && C.S.plan.items.length < before) C.notice('Some files changed outside Onyx, so their moves were taken out of the plan.', 'warn', 4000);
+      } else if (C.S.plan) { C.S.plan = null; C.renderAll(); }
     } else {
       if (r.goneDirs && r.goneDirs.length) LI.dropDirs(r.goneDirs);
       for (const l of r.listings || []) LI.mergeListing(l);
@@ -548,14 +556,15 @@
     clearTimeout(changeTimer);
     changeTimer = setTimeout(async () => {
       const v2 = V(); if (!v2 || v2 !== v) return;
-      if (O.rn || C.S.busy || C.S.plan || document.querySelector('.modal-container')) { changeTimer = setTimeout(() => onFsChanged(null), 1500); return; }
+      if (O.rn || C.S.busy || document.querySelector('.modal-container')) { changeTimer = setTimeout(() => onFsChanged(null), 1500); return; }
       const dirs = [...pendingDirs]; pendingDirs.clear();
       if (v.browse) { LI.relist(dirs); return; }
       if (Date.now() - lastRescan < 1500) { changeTimer = setTimeout(() => onFsChanged(null), 1500); return; }
       lastRescan = Date.now();
       const r = await C.api.rescan();
       if (V() !== v || !r || r.error) return;
-      apply({ vault: r }, { noSelect: true });
+      apply({ vault: r }, { noSelect: true, keepPlan: true });
+      if (C.renderExplorer) C.renderExplorer();
     }, 400);
   }
 

@@ -101,7 +101,18 @@
   function closeView(v) {
     removeFrom(v);
     if (!ws.hidden.includes(v)) ws.hidden.push(v);
-    tidyPanes(); save(); C.renderAll();
+    tidyPanes();
+    // closing the last tab in the middle closes the folder and goes back to the home screen
+    if (ws.main.every(p => !p.tabs.length) && C.onAllClosed) { C.onAllClosed(); return; }
+    save(); C.renderAll();
+  }
+  // back to a fresh layout for the home screen: the Library in the middle, nothing else open there
+  function resetMain() {
+    for (const v of ALL) { const k = keyOf(v); if (k && k.startsWith('main') && v !== 'library') { removeFrom(v); if (!ws.hidden.includes(v)) ws.hidden.push(v); } }
+    tidyPanes();
+    if (!keyOf('library')) { ws.hidden = ws.hidden.filter(x => x !== 'library'); ws.main[0].tabs.unshift('library'); }
+    const k = keyOf('library'); region(k).active = 'library';
+    save();
   }
   function activate(v, opts) {
     let k = keyOf(v);
@@ -147,7 +158,7 @@
       document.querySelector('.resize-handle.' + side).hidden = !visible;
       if (!visible) { dock.innerHTML = ''; continue; }
       dock.innerHTML = '<div class="dock-tabs drag" data-strip="' + side + '" role="tablist" aria-label="' + side + ' sidebar">' +
-        r.tabs.map(v => { const m = tabMeta(v); return '<button class="dock-tab' + (v === r.active ? ' is-active' : '') + '" draggable="true" role="tab" aria-selected="' + (v === r.active) + '" data-view="' + v + '" data-action="activate-view" data-tip="' + esc(m.name) + '" aria-label="' + esc(m.name) + '">' + icon(m.icon) + '</button>'; }).join('') +
+        r.tabs.map(v => { const m = tabMeta(v); return '<button class="dock-tab' + (v === r.active ? ' is-active' : '') + '" draggable="false" role="tab" aria-selected="' + (v === r.active) + '" data-view="' + v + '" data-action="activate-view" data-tip="' + esc(m.name) + '" aria-label="' + esc(m.name) + '">' + icon(m.icon) + '</button>'; }).join('') +
         '<span class="spacer"></span>' +
         (r.active ? '<span class="dock-title">' + esc(tabMeta(r.active).title || tabMeta(r.active).name) + '</span>' : '') +
         '<button class="clickable-icon" data-action="collapse-dock" data-region="' + side + '" data-tip="Hide sidebar" aria-label="Hide ' + side + ' sidebar">' + icon(side === 'left' ? 'panel-left' : 'panel-right') + '</button></div>' +
@@ -161,9 +172,9 @@
     panes.innerHTML = ws.main.map((p, i) => (i ? '<div class="pane-split" data-split role="separator" aria-orientation="' + (ws.split === 'row' ? 'vertical' : 'horizontal') + '"></div>' : '') +
       '<div class="pane" data-pane="' + i + '" style="flex:' + (ws.main.length > 1 ? (i ? 1 - ws.ratio : ws.ratio) : 1) + ' 1 0">' +
       '<div class="tab-header drag' + (p.tabs.length <= 1 ? ' is-single' : '') + '" data-strip="main:' + i + '"><div class="tabs" role="tablist">' +
-      p.tabs.map(v => { const m = tabMeta(v); return '<div class="tab' + (v === p.active ? ' is-active' : '') + '" draggable="true" role="tab" tabindex="0" aria-selected="' + (v === p.active) + '" data-view="' + v + '" data-action="activate-view">' +
+      p.tabs.map(v => { const m = tabMeta(v); return '<div class="tab' + (v === p.active ? ' is-active' : '') + '" draggable="false" role="tab" tabindex="0" aria-selected="' + (v === p.active) + '" data-view="' + v + '" data-action="activate-view">' +
         icon(m.icon) + '<span>' + esc(m.title || m.name) + '</span>' + (m.count != null ? '<span class="count">' + m.count + '</span>' : '') +
-        (v === 'library' ? '' : '<button class="tab-close" data-action="close-view" data-view="' + v + '" aria-label="Close ' + esc(m.name) + '" data-tip="Close">' + icon('x') + '</button>') + '</div>'; }).join('') +
+        ('<button class="tab-close" data-action="close-view" data-view="' + v + '" aria-label="Close ' + esc(m.name) + '" data-tip="Close">' + icon('x') + '</button>') + '</div>'; }).join('') +
       '</div><div class="spacer"></div>' +
       (i === ws.main.length - 1 ? '<button class="clickable-icon pane-btn" data-action="toggle-right" data-tip="Toggle right sidebar" data-cmd="toggle-right" aria-label="Toggle right sidebar">' + icon('panel-right') + '</button>' : '') +
       '</div><div class="pane-body" data-body="main:' + i + '">' + (p.active ? '' : emptyPane()) + '</div></div>').join('');
@@ -226,32 +237,62 @@
     }
     return null;
   }
-  document.addEventListener('dragstart', e => {
-    const t = e.target.closest && e.target.closest('[draggable][data-view]');
-    if (!t) return;
-    dragView = t.dataset.view;
-    e.dataTransfer.setData('text/onyx-view', dragView);
-    e.dataTransfer.effectAllowed = 'move';
+  // Tabs are dragged with pointer events rather than HTML5 drag and drop: the tab strips double as the window's
+  // title bar (-webkit-app-region: drag), and on Windows that swallows dragover/drop, so HTML5 drags never land.
+  let pd = null, ghost = null, swallowClick = false;
+  const at = (x, y) => { const el = document.elementFromPoint(x, y); return { target: el || document.body, clientX: x, clientY: y }; };
+  function beginDrag(ev) {
+    dragView = pd.view;
     document.body.classList.add('view-dragging');
     document.body.classList.toggle('left-free', !ws.left.tabs.length || ws.left.collapsed);
     document.body.classList.toggle('right-free', !ws.right.tabs.length || ws.right.collapsed);
-  });
-  document.addEventListener('dragover', e => {
-    if (!dragView) return;
-    const tg = computeTarget(e);
-    if (!tg) { hideInd(); return; }
-    e.preventDefault(); e.dataTransfer.dropEffect = 'move';
-    dropTarget = tg.t; showInd(tg.rect, tg.kind);
-  });
-  document.addEventListener('drop', e => {
-    if (!dragView) return;
+    pd.el.classList.add('is-dragging');
+    const m = tabMeta(dragView);
+    ghost = document.createElement('div');
+    ghost.className = 'tab-ghost';
+    ghost.innerHTML = C.icon(m.icon) + '<span>' + C.esc(m.title || m.name) + '</span>';
+    document.body.appendChild(ghost);
+    moveGhost(ev);
+    if (C.hideTooltip) C.hideTooltip();
+  }
+  function moveGhost(ev) { if (ghost) ghost.style.transform = 'translate(' + (ev.clientX + 12) + 'px,' + (ev.clientY + 10) + 'px)'; }
+  document.addEventListener('pointerdown', e => {
+    if (e.button !== 0) return;
+    const t = e.target.closest && e.target.closest('[draggable][data-view]');
+    if (!t || e.target.closest('.tab-close')) return;
+    pd = { view: t.dataset.view, el: t, x: e.clientX, y: e.clientY, id: e.pointerId, live: false };
+    try { t.setPointerCapture(e.pointerId); } catch { /* fine */ }
+  }, true);
+  document.addEventListener('pointermove', e => {
+    if (!pd || e.pointerId !== pd.id) return;
+    if (!pd.live) { if (Math.hypot(e.clientX - pd.x, e.clientY - pd.y) < 6) return; pd.live = true; beginDrag(e); }
     e.preventDefault();
-    const v = dragView, t = dropTarget;
+    moveGhost(e);
+    const tg = computeTarget(at(e.clientX, e.clientY));
+    if (!tg) { hideInd(); return; }
+    dropTarget = tg.t; showInd(tg.rect, tg.kind);
+  }, true);
+  function finish(e, cancel) {
+    if (!pd) return;
+    const was = pd; pd = null;
+    try { was.el.releasePointerCapture(was.id); } catch { /* fine */ }
+    if (!was.live) return;
+    swallowClick = true; setTimeout(() => { swallowClick = false; }, 0);
+    const v = dragView, t = cancel ? null : (e ? (computeTarget(at(e.clientX, e.clientY)) || {}).t : dropTarget);
     endDrag();
-    if (t) moveView(v, t);
-  });
-  document.addEventListener('dragend', endDrag);
-  function endDrag() { dragView = null; hideInd(); document.body.classList.remove('view-dragging', 'left-free', 'right-free'); }
+    if (v && t) moveView(v, t);
+  }
+  document.addEventListener('pointerup', e => { if (pd && e.pointerId === pd.id) finish(e); }, true);
+  document.addEventListener('pointercancel', e => { if (pd && e.pointerId === pd.id) finish(null, true); }, true);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && pd && pd.live) { e.preventDefault(); e.stopPropagation(); finish(null, true); } }, true);
+  document.addEventListener('click', e => { if (swallowClick) { e.preventDefault(); e.stopPropagation(); swallowClick = false; } }, true);
+  document.addEventListener('dragstart', e => { if (e.target.closest && e.target.closest('[draggable][data-view]')) e.preventDefault(); });
+  function endDrag() {
+    dragView = null; hideInd();
+    if (ghost) { ghost.remove(); ghost = null; }
+    document.querySelectorAll('.is-dragging[data-view]').forEach(x => x.classList.remove('is-dragging'));
+    document.body.classList.remove('view-dragging', 'left-free', 'right-free');
+  }
 
   // split ratio
   document.addEventListener('mousedown', e => {
@@ -298,7 +339,7 @@
     VIEWS, PRESETS,
     init(ctx, saved) { C = ctx; ws = normalize(saved); },
     get: () => ws,
-    render, isVisible, activate, moveView, closeView, toggleDock, applyPreset, swapSides, keyOf, tabMenuItems, declutter,
+    render, isVisible, activate, moveView, closeView, resetMain, toggleDock, applyPreset, swapSides, keyOf, tabMenuItems, declutter,
     isHidden: v => ws.hidden.includes(v),
   };
 })();

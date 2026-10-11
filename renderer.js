@@ -1031,6 +1031,22 @@
       { label: 'Open Library', run: () => LIB.showLibrary() }), 600);
   }
   async function openFolder() { afterOpen(await api.pickFolder()); }
+  // close the folder: every tab goes, back to the home screen
+  function closeFolder() {
+    const done = () => {
+      if (window.OnyxViewer) window.OnyxViewer.close();
+      setVault(null);
+      if (api.closeFolder) api.closeFolder();
+      WS.resetMain();
+      renderAll();
+    };
+    if (S.plan && S.plan.items.some(isMoving)) {
+      modal({ title: 'Close this folder?', html: '<p>The plan you haven’t applied yet will be discarded. Your files stay as they are.</p>',
+        buttons: [{ label: 'Keep it open', action: () => { WS.resetMain(); renderAll(); } }, { label: 'Close folder', cls: 'mod-warning', action: done }], onClose: () => { if (S.vault) { WS.resetMain(); renderAll(); } } });
+      return;
+    }
+    done();
+  }
   async function openFolderPath(p) { const r = await api.openRecent(p); if (r && r.error) { modal({ title: 'Can’t open this folder', html: '<p>' + esc(r.error) + '</p>', buttons: [{ label: 'OK', cls: 'mod-cta' }] }); return; } afterOpen(r); }
   // This PC: a page over the Library with recent folders, drives and the usual folders
   function pcHost() {
@@ -1147,8 +1163,36 @@
   function setStrategy(id) { S.strategy = id; store.set('strategy', id); if (WS.isVisible('organize')) renderSide(); if (!S.plan && S.vault && WS.isVisible('structure')) renderOne('structure'); }
   function toggleSidebar(side) { WS.toggleDock(side); }
   // the Organize panel lives in a sidebar that stays hidden until you need it
-  function openOrganize(toggle) {
-    if (S.vault && S.vault.browse) { notice('This location is browse-only. In the Library, right-click a folder and choose <b>Organize this folder</b>.', 'warn', 6000); return; }
+  // Organize works on the folder you're looking at: inside a subfolder of the Library, Onyx asks whether to sort
+  // just that folder or the whole one you opened; when browsing a drive, it offers the folder that's open.
+  function absOf(rel) {
+    const root = (S.vault && S.vault.rootPath) || '';
+    const sep = root.includes('\\') ? '\\' : '/';
+    return rel ? root.replace(/[\\/]+$/, '') + sep + rel.replace(/\//g, sep) : root;
+  }
+  async function organizeFolderAt(abs) {
+    const r = await api.openRecent(abs);
+    if (!r || r.error) { modal({ title: 'Can’t open this folder', html: '<p>' + esc((r && r.error) || 'Unknown error') + '</p>', buttons: [{ label: 'OK', cls: 'mod-cta' }] }); return; }
+    await afterOpen(r, true);
+    if (S.vault && !S.vault.browse) { WS.activate('structure'); notice('Organizing <b>' + esc(S.vault.vaultName) + '</b>', 'success', 2200); }
+    else notice('<b>' + esc(folderName(abs)) + '</b> is a drive or system folder, so it’s browse-only. Open a folder inside it, then Organize.', 'warn', 6000);
+  }
+  function openOrganize() {
+    if (!S.vault) return;
+    const cwd = (window.OnyxLibrary && OnyxLibrary.cwd) || '';
+    if (S.vault.browse) {
+      if (!cwd) { notice('<b>' + esc(S.vault.rootPath) + '</b> is browse-only. Open a folder in the Library, then press Organize to sort that folder.', 'warn', 6000); return; }
+      const name = esc(folderName(cwd));
+      modal({ title: 'Organize ' + name + '?', html: '<p>Onyx will open <b>' + name + '</b> and suggest a tidy structure for the files in it. Nothing moves until you approve the plan.</p><p class="muted" style="margin-top:8px">' + esc(absOf(cwd)) + '</p>',
+        buttons: [{ label: 'Cancel' }, { label: 'Organize ' + name, cls: 'mod-cta', action: () => { organizeFolderAt(absOf(cwd)); } }] });
+      return;
+    }
+    if (cwd && !S.plan && !S.vault.demo && !WS.isVisible('structure')) {
+      const name = esc(folderName(cwd)), all = esc(S.vault.vaultName);
+      modal({ title: 'What should Onyx organize?', html: '<p>You’re looking at <b>' + name + '</b>, a folder inside <b>' + all + '</b>.</p>',
+        buttons: [{ label: 'All of ' + all, action: () => { WS.activate('structure'); } }, { label: 'Just ' + name, cls: 'mod-cta', action: () => { organizeFolderAt(absOf(cwd)); } }] });
+      return;
+    }
     WS.activate('structure');
   }
   function layoutMenu(el) {
@@ -1171,6 +1215,7 @@
     items.push({ label: 'Browse This PC…', icon: 'monitor', sub: 'drives', action: openPlaces });
     items.push({ label: 'Open the demo folder', icon: 'flask-conical', action: loadDemo });
     if (S.vault && !S.vault.demo) items.push({ label: 'Show in system explorer', icon: 'external-link', action: () => api.reveal('') });
+    if (S.vault) items.push('sep', { label: 'Close folder', icon: 'x', sub: 'back to the home screen', action: closeFolder });
     showMenu(items, r.left, r.top, { above: true });
   }
   function themeMenu(el) {
@@ -1202,6 +1247,7 @@
     { id: 'view-graph', name: 'View: Graph view', hk: 'Mod+G', run: () => WS.activate('graph') },
     { id: 'view-files', name: 'View: Folders', hk: 'Mod+Shift+E', run: () => { WS.activate('files'); focusTree($('#explorer')); } },
     { id: 'view-organize', name: 'View: Organize panel', run: () => openOrganize() },
+    { id: 'close-folder', name: 'Folder: Close (back to the home screen)', hk: 'Mod+Shift+W', run: () => { if (S.vault) closeFolder(); } },
     { id: 'view-library', name: 'View: Library', hk: 'Mod+L', run: () => LIB.showLibrary() },
     { id: 'view-tags', name: 'View: Tags panel', run: () => WS.activate('tags') },
     { id: 'quick-find', name: 'Files: Quick find', hk: 'Mod+K', run: () => LIB.quickFind() },
@@ -1552,6 +1598,7 @@
     WS.init({
       icon, esc, notice, showMenu, viewMeta,
       renderAll: () => renderAll(),
+      onAllClosed: () => { if (S.vault) closeFolder(); else { WS.resetMain(); renderAll(); } },
       saveWorkspace: (w) => { S.settings.ui.workspace = w; persist('workspace', 'ui'); },
     }, UI().workspace);
     if (!store.get('layoutV4', false)) { store.set('layoutV4', true); store.set('layoutV3', true); WS.declutter(); }

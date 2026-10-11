@@ -508,6 +508,11 @@ ipcMain.handle('open-recent', async (e, folder) => {
   if (!fs.existsSync(folder)) return { error: 'That folder no longer exists.' };
   return loadFolder(folder);
 });
+ipcMain.handle('close-folder', async () => {
+  stopWatch();
+  scan = { root: '', files: [], dirs: [], skipped: [], demo: false };
+  return true;
+});
 ipcMain.handle('load-demo', async () => {
   const v = demoVault();
   scan = { root: '', files: v.files, dirs: v.dirs, skipped: [], demo: true };
@@ -793,6 +798,7 @@ function autoTagSome(files, dir) {
 ipcMain.handle('list-dir', async (e, rel) => {
   if (!scan.root || scan.demo) return { error: 'Nothing to list' };
   const r = await listDirectory(rel);
+  if (!r.error && scan.browse) { const full = insideRoot(rel || ''); if (full) watchBrowseDir(full); }
   if (!r.error && autoTagSome(r.files, r.path)) saveTagDb();
   r.tags = tagView();
   return r;
@@ -1245,17 +1251,38 @@ ipcMain.on('start-drag', (event, rels) => {
 // see changes made by other programs (Explorer, downloads finishing) as they happen
 let watcher = null, watchTimer = null;
 const watchDirs = new Set();
-function stopWatch() { if (watcher) { try { watcher.close(); } catch { /* closed */ } watcher = null; } }
+// browsing a drive: one shallow watcher per folder that's been looked at (the open one and the ones listed in
+// the tree), newest kept, so changes made in File Explorer show up wherever you are
+const browseWatchers = new Map();
+const BROWSE_WATCH_MAX = 32;
+function stopWatch() {
+  if (watcher) { try { watcher.close(); } catch { /* closed */ } watcher = null; }
+  for (const w of browseWatchers.values()) { try { w.close(); } catch { /* closed */ } }
+  browseWatchers.clear();
+}
 function startWatch(full, recursive) {
   stopWatch();
   if (!full || !mainWindow) return;          // nothing to tell without a window
   try {
     // Windows and macOS watch a whole tree natively; on Linux only the top folder is watched
     const w = fs.watch(full, { recursive: !!recursive && process.platform !== 'linux' }, (ev, name) => onFsEvent(full, name));
-    w.on('error', () => { if (watcher === w) stopWatch(); });
+    w.on('error', () => { if (watcher === w) { try { w.close(); } catch { /* closed */ } watcher = null; } });
     if (w.unref) w.unref();
     watcher = w;
   } catch { watcher = null; }
+}
+function watchBrowseDir(full) {
+  if (!full || !mainWindow || !scan.browse) return;
+  const k = full.toLowerCase();
+  if (k === path.resolve(scan.root).toLowerCase() && watcher) return;
+  if (browseWatchers.has(k)) { const w = browseWatchers.get(k); browseWatchers.delete(k); browseWatchers.set(k, w); return; }
+  try {
+    const w = fs.watch(full, { recursive: false }, (ev, name) => onFsEvent(full, name));
+    w.on('error', () => { try { w.close(); } catch { /* closed */ } if (browseWatchers.get(k) === w) browseWatchers.delete(k); });
+    if (w.unref) w.unref();
+    browseWatchers.set(k, w);
+    while (browseWatchers.size > BROWSE_WATCH_MAX) { const [old, ow] = browseWatchers.entries().next().value; try { ow.close(); } catch { /* closed */ } browseWatchers.delete(old); }
+  } catch { /* not watchable (permissions); the folder still lists */ }
 }
 function onFsEvent(base, name) {
   if (!mainWindow || scan.demo || !scan.root) return;
@@ -1277,7 +1304,7 @@ function flushWatch() {
 ipcMain.handle('fs-watch', async (e, rel) => {
   if (!scan.browse || !scan.root) return;
   const full = insideRoot(rel || '');
-  if (full) startWatch(full, false);
+  if (full) watchBrowseDir(full);
 });
 
 // ============================================================================

@@ -388,6 +388,7 @@
   function renderLibrary(el) {
     const v = V();
     if (!v) {
+      L.vaultKey = null;
       if (C.emptyState) { el.innerHTML = '<div class="lib-welcome">' + C.emptyState() + '</div>'; return; }
       el.innerHTML = '<div class="empty-state"><div class="empty-inner"><img class="logo small" src="icon.png" alt=""><h1 style="font-size:20px">Your library</h1><div class="sub">Open a folder to browse it here: search everything, tag files, and find them again in a second.</div><button class="btn mod-cta" data-action="open-folder">' + icon('folder-open') + 'Open folder</button></div></div>';
       return;
@@ -1616,7 +1617,16 @@
   }
   function relist(dirs) {
     const v = V(); if (!v || !v.browse) return;
-    for (const d of dirs) { const k = (d || '').toLowerCase(); if (L.loaded.has(k)) { L.loaded.delete(k); ensureListed(d); } }
+    // re-read in place, so the list doesn't blank out while it reloads
+    const todo = dirs.filter(d => L.loaded.has((d || '').toLowerCase()));
+    if (!todo.length) return;
+    Promise.all(todo.map(d => C.api.listDir(d || '').then(r => ({ d, r }), () => ({ d, r: null })))).then(res => {
+      if (V() !== v) return;
+      const gone = [];
+      for (const { d, r } of res) { if (!r) continue; if (r.error && !r.files) { if (d) gone.push(d); continue; } mergeListing(r); }
+      if (gone.length) dropDirs(gone);
+      rankCols = null; refresh(); renderTagsPanel(); if (C.renderExplorer) C.renderExplorer();
+    });
   }
   function reveal(path) { L.focus = path; ensureVisible(path); paint(); }
   function focusList() { const sc = $('#libScroll'); if (sc) sc.focus({ preventScroll: true }); }
