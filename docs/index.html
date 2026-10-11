@@ -3,8 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Onyx: a file organizer that asks before it moves anything</title>
-<meta name="description" content="Onyx plans a clean folder structure for a messy folder, shows you every move, and undoes it all in one click. Free for personal use, for Windows.">
+<title>Onyx: tidy any folder, nothing moves until you say so</title>
+<meta name="description" content="Onyx is a free Windows app that plans a clean structure for a messy folder, shows you every move first, and undoes it all with one click.">
+<meta name="theme-color" content="#e4e6ec">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Onyx">
 <meta property="og:url" content="https://barbaqueda.github.io/onyx/">
@@ -19,89 +20,491 @@
 <meta name="twitter:description" content="Plan a clean folder structure, review every move, apply, and undo it all in one click.">
 <meta name="twitter:image" content="https://barbaqueda.github.io/onyx/social-preview.png">
 <link rel="icon" href="icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,650;12..96,800&family=Hanken+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-:root { --bg:#0d0d10; --panel:#16161b; --line:#2a2a33; --text:#f2f2f5; --muted:#a9aab6; --accent:#8f9cf9; --accent-2:#a3aefa; }
-* { box-sizing:border-box; margin:0; }
-body { background:var(--bg); color:var(--text); font-family:Inter, "Segoe UI", system-ui, -apple-system, sans-serif; line-height:1.55; }
-body::before { content:""; position:fixed; inset:-30% auto auto -20%; width:900px; height:900px; background:radial-gradient(closest-side, rgba(143,156,249,.16), transparent); pointer-events:none; z-index:-1; }
-a { color:inherit; }
-.wrap { max-width:1080px; margin:0 auto; padding:0 24px; }
-nav { display:flex; align-items:center; justify-content:space-between; padding:22px 0; }
-.brand { display:flex; align-items:center; gap:10px; font-weight:800; font-size:20px; text-decoration:none; }
-.brand img { width:30px; height:30px; }
-nav .links a { color:var(--muted); text-decoration:none; margin-left:22px; font-size:15px; }
-nav .links a:hover { color:var(--text); }
-.hero { text-align:center; padding:56px 0 34px; }
-h1 { font-size:clamp(34px, 6vw, 60px); line-height:1.08; letter-spacing:-.03em; font-weight:800; max-width:820px; margin:0 auto; }
-h1 em { font-style:normal; color:var(--accent-2); }
-.lede { color:var(--muted); font-size:clamp(17px, 2.2vw, 20px); max-width:640px; margin:20px auto 0; }
-.cta { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-top:30px; }
-.btn { display:inline-flex; align-items:center; gap:8px; padding:13px 22px; border-radius:10px; font-weight:650; font-size:16px; text-decoration:none; border:1px solid var(--line); background:var(--panel); }
-.btn:hover { border-color:#3c3c48; }
-.btn.primary { background:var(--accent); color:#0d0d10; border-color:transparent; }
-.btn.primary:hover { background:var(--accent-2); }
-.note { color:var(--muted); font-size:13px; margin-top:12px; }
-.demo { margin:44px auto 0; border-radius:14px; overflow:hidden; border:1px solid var(--line); box-shadow:0 30px 80px rgba(0,0,0,.55); }
-.demo img { display:block; width:100%; height:auto; }
-.features { display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:16px; margin:72px 0 0; }
-.card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:22px; }
-.card h3 { font-size:17px; margin-bottom:6px; }
-.card p { color:var(--muted); font-size:15px; }
-.shots { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px; }
-.shots img { width:100%; border-radius:12px; border:1px solid var(--line); display:block; }
-.how { margin-top:72px; text-align:center; }
-.how h2 { font-size:30px; letter-spacing:-.02em; }
-.steps { display:flex; justify-content:center; gap:10px; flex-wrap:wrap; margin-top:20px; }
-.step { padding:9px 16px; border-radius:999px; background:var(--panel); border:1px solid var(--line); color:var(--muted); font-size:15px; }
-.step b { color:var(--text); }
-footer { color:var(--muted); font-size:14px; text-align:center; padding:72px 0 40px; }
-footer a { color:var(--muted); }
-@media (max-width:700px) { .shots { grid-template-columns:1fr; } nav .links a:not(:last-child) { display:none; } }
+  :root {
+    --stone: #e4e6ec;        /* page: pale cool limestone */
+    --stone-deep: #d3d6df;   /* rules */
+    --ink: #17181f;          /* text */
+    --ink-soft: #4a4c58;     /* secondary text */
+    --onyx: #101116;         /* product windows */
+    --onyx-raised: #1a1b22;
+    --onyx-line: #2b2c36;
+    --on-onyx: #ecedf2;
+    --on-onyx-soft: #9a9cab;
+    --violet: #4651cf;       /* accent on stone */
+    --violet-light: #8f9cf9; /* accent inside onyx windows */
+    --safe: #2c7a5b;
+    --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+    --body: "Hanken Grotesk", "Segoe UI", system-ui, sans-serif;
+    --r-window: 14px;
+    --r-control: 9px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body { background: var(--stone); color: var(--ink); font: 400 17px/1.6 var(--body); -webkit-font-smoothing: antialiased; }
+  img { display: block; max-width: 100%; }
+  a { color: inherit; }
+  code { font-family: Consolas, "Cascadia Mono", monospace; font-size: .92em; }
+  :focus-visible { outline: 2.5px solid var(--violet); outline-offset: 3px; border-radius: 4px; }
+  .wrap { max-width: 1160px; margin: 0 auto; padding: 0 28px; }
+
+  /* nav */
+  .nav { display: flex; align-items: center; gap: 28px; padding: 22px 0; }
+  .logo { display: flex; align-items: center; gap: 10px; font: 800 21px/1 var(--display); letter-spacing: -.02em; text-decoration: none; }
+  .logo img { width: 30px; height: 30px; }
+  .nav-links { display: flex; gap: 26px; margin-left: auto; font-size: 15px; }
+  .nav-links a { text-decoration: none; color: var(--ink-soft); }
+  .nav-links a:hover { color: var(--ink); }
+
+  /* buttons */
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 9px; height: 50px; padding: 0 22px; border-radius: var(--r-control); font: 600 16px/1 var(--body); text-decoration: none; border: 1.5px solid var(--ink); background: transparent; color: var(--ink); cursor: pointer; }
+  .btn svg { width: 18px; height: 18px; flex-shrink: 0; }
+  .btn-primary { background: var(--ink); color: var(--stone); }
+  .btn-primary:hover { background: #2a2c36; border-color: #2a2c36; }
+  .btn:not(.btn-primary):hover { background: rgba(23,24,31,.06); }
+
+  /* hero */
+  .hero { display: grid; grid-template-columns: minmax(0, 11fr) minmax(0, 13fr); gap: 48px; align-items: center; padding: 48px 0 96px; }
+  .hero h1 { font: 800 clamp(44px, 6.2vw, 76px)/0.98 var(--display); letter-spacing: -.035em; }
+  .hero h1 span { display: block; margin-top: .12em; color: var(--ink-soft); font-weight: 650; font-size: .62em; line-height: 1.05; letter-spacing: -.025em; }
+  .hero-lede { margin-top: 26px; max-width: 30em; font-size: 19px; color: var(--ink-soft); }
+  .hero-ctas { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 34px; }
+  .hero-fine { margin-top: 14px; font-size: 14px; color: var(--ink-soft); }
+
+  /* the live demo window */
+  .window { background: var(--onyx); color: var(--on-onyx); border-radius: var(--r-window); box-shadow: 0 40px 80px -30px rgba(16,17,22,.55), 0 0 0 1px rgba(16,17,22,.9); overflow: hidden; }
+  .win-bar { display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 16px; border-bottom: 1px solid var(--onyx-line); font-size: 14px; }
+  .win-bar img { width: 18px; height: 18px; }
+  .win-title { font-weight: 600; }
+  .win-count { margin-left: auto; color: var(--on-onyx-soft); font-variant-numeric: tabular-nums; }
+  .stage { position: relative; height: 396px; padding: 18px; overflow: hidden; }
+  .stage[data-state="messy"] .file { transform: rotate(var(--tilt, 0deg)); }
+  .pile { display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start; }
+  .groups { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 12px; align-content: start; }
+  .group-name { display: flex; align-items: center; gap: 7px; margin-bottom: 6px; font-size: 13px; font-weight: 600; color: var(--on-onyx); }
+  .group-name svg { width: 15px; height: 15px; color: var(--violet-light); flex-shrink: 0; }
+  .group-name em { font-style: normal; font-weight: 500; color: var(--on-onyx-soft); margin-left: auto; font-size: 12px; }
+  .group-files { display: flex; flex-direction: column; gap: 5px; padding-left: 8px; border-left: 1px solid var(--onyx-line); }
+  .file { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 11px 0 9px; border-radius: 7px; background: var(--onyx-raised); border: 1px solid var(--onyx-line); font: 500 13px/1 var(--body); color: var(--on-onyx); white-space: nowrap; max-width: 100%; text-align: left; cursor: default; }
+  .file svg { width: 15px; height: 15px; flex-shrink: 0; color: var(--on-onyx-soft); }
+  .file .fname { overflow: hidden; text-overflow: ellipsis; }
+  .file .to { display: none; color: var(--violet-light); font-weight: 500; }
+  .groups .file { width: 100%; }
+  .stage[data-state="plan"] .file { cursor: pointer; }
+  .stage[data-state="plan"] .file .to { display: inline; }
+  .stage[data-state="plan"] .file:hover { border-color: #444656; }
+  .file.kept { opacity: .45; }
+  .file.kept .to { text-decoration: line-through; color: var(--on-onyx-soft); }
+  .stage-hint { position: absolute; left: 18px; right: 18px; bottom: 14px; font-size: 13px; color: var(--on-onyx-soft); visibility: hidden; }
+  .stage[data-state="plan"] .stage-hint { visibility: visible; }
+  .win-actions { display: flex; align-items: center; gap: 10px; min-height: 64px; padding: 12px 16px; border-top: 1px solid var(--onyx-line); background: #0c0d11; }
+  .win-msg { font-size: 14px; color: var(--on-onyx-soft); margin-right: auto; }
+  .win-msg b { color: var(--on-onyx); font-weight: 600; }
+  .win-msg .ok { color: #6fd3a3; }
+  .wbtn { height: 38px; padding: 0 16px; border-radius: 8px; border: 1px solid var(--onyx-line); background: var(--onyx-raised); color: var(--on-onyx); font: 600 14px/1 var(--body); cursor: pointer; white-space: nowrap; }
+  .wbtn:hover { border-color: #444656; }
+  .wbtn.go { background: var(--violet-light); border-color: var(--violet-light); color: #0d0e13; }
+  .wbtn.go:hover { background: #a8b2fb; }
+  .wbtn:disabled { opacity: .5; cursor: default; }
+  .window :focus-visible { outline-color: var(--violet-light); }
+
+  /* sections */
+  section { padding: 96px 0; }
+  .sec-head { max-width: 40em; margin-bottom: 44px; }
+  h1, h2 { text-wrap: balance; }
+  p { text-wrap: pretty; }
+  h2 { font: 800 clamp(32px, 4.2vw, 50px)/1.04 var(--display); letter-spacing: -.03em; }
+  .lede { margin-top: 16px; font-size: 19px; color: var(--ink-soft); max-width: 36em; }
+  .rule { border: 0; border-top: 1px solid var(--stone-deep); }
+
+  /* how it works: a real sequence, so the steps are numbered */
+  .steps { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: 48px; align-items: start; }
+  .step-list { list-style: none; display: flex; flex-direction: column; gap: 4px; }
+  .step-btn { display: grid; grid-template-columns: 36px 1fr; gap: 4px 14px; width: 100%; padding: 18px 18px 18px 14px; border: 0; border-radius: 12px; background: transparent; color: var(--ink); text-align: left; cursor: pointer; font: inherit; }
+  .step-btn:hover { background: rgba(23,24,31,.04); }
+  .step-btn .n { grid-row: span 2; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font: 650 15px/1 var(--display); border: 1.5px solid var(--stone-deep); color: var(--ink-soft); }
+  .step-btn .t { font: 650 20px/1.25 var(--display); letter-spacing: -.01em; }
+  .step-btn .d { font-size: 15px; color: var(--ink-soft); }
+  .step-btn[aria-selected="true"] { background: #fff; box-shadow: 0 1px 2px rgba(16,17,22,.06), 0 0 0 1px var(--stone-deep); }
+  .step-btn[aria-selected="true"] .n { background: var(--ink); border-color: var(--ink); color: var(--stone); }
+  .shot { border-radius: var(--r-window); overflow: hidden; background: var(--onyx); box-shadow: 0 30px 60px -28px rgba(16,17,22,.5), 0 0 0 1px rgba(16,17,22,.85); aspect-ratio: 16 / 10; }
+  .shot img { width: 100%; height: 100%; object-fit: cover; object-position: left top; }
+  .step-shot { position: sticky; top: 24px; }
+
+  /* safety: dark band, plain guarantees */
+  .safe { background: var(--onyx); color: var(--on-onyx); }
+  .safe .lede { color: var(--on-onyx-soft); }
+  .promises { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 56px; }
+  .promise { display: grid; grid-template-columns: 26px 1fr; gap: 14px; padding: 22px 0; border-top: 1px solid var(--onyx-line); }
+  .promise svg { width: 22px; height: 22px; color: #6fd3a3; margin-top: 3px; }
+  .promise h3 { font: 650 19px/1.3 var(--display); }
+  .promise p { margin-top: 4px; color: var(--on-onyx-soft); font-size: 16px; }
+
+  /* split sections */
+  .split { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 56px; align-items: center; }
+  .split.flip { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); }
+  .split.flip .split-text { order: 2; }
+  .feature-list { list-style: none; margin-top: 30px; display: flex; flex-direction: column; gap: 18px; }
+  .feature-list li { padding-left: 18px; border-left: 2px solid var(--stone-deep); }
+  .feature-list b { display: block; font: 650 18px/1.3 var(--display); }
+  .feature-list span { color: var(--ink-soft); font-size: 16px; }
+  kbd { font: 600 13px/1 var(--body); padding: 3px 6px; border-radius: 5px; background: #fff; border: 1px solid var(--stone-deep); box-shadow: 0 1px 0 var(--stone-deep); }
+
+  /* AI choice: a real comparison, so a table */
+  .ai-table { width: 100%; border-collapse: collapse; margin-top: 30px; font-size: 16px; }
+  .ai-table th, .ai-table td { text-align: left; padding: 14px 16px 14px 0; border-top: 1px solid var(--stone-deep); vertical-align: top; }
+  .ai-table thead th { border-top: 0; font: 600 14px/1.3 var(--body); color: var(--ink-soft); padding-bottom: 10px; }
+  .ai-table tbody th { font: 650 17px/1.3 var(--display); white-space: nowrap; }
+  .ai-table td { color: var(--ink-soft); }
+  .tick { color: var(--safe); font-weight: 600; }
+
+  /* faq */
+  .faq { max-width: 780px; }
+  .faq details { border-top: 1px solid var(--stone-deep); }
+  .faq details:last-child { border-bottom: 1px solid var(--stone-deep); }
+  .faq summary { list-style: none; display: flex; align-items: center; gap: 16px; padding: 22px 0; cursor: pointer; font: 650 20px/1.3 var(--display); letter-spacing: -.01em; }
+  .faq summary::-webkit-details-marker { display: none; }
+  .faq summary::after { content: ""; margin-left: auto; width: 10px; height: 10px; flex-shrink: 0; border-right: 2px solid var(--ink-soft); border-bottom: 2px solid var(--ink-soft); transform: translateY(-3px) rotate(45deg); transition: transform .2s; }
+  .faq details[open] summary::after { transform: translateY(2px) rotate(-135deg); }
+  .faq details p { padding: 0 0 22px; max-width: 40em; color: var(--ink-soft); }
+
+  /* closing */
+  .closing-box { display: grid; grid-template-columns: auto 1fr auto; gap: 32px; align-items: center; padding: 44px; border-radius: 22px; background: #fff; box-shadow: 0 0 0 1px var(--stone-deep); }
+  .closing-box img { width: 88px; height: 88px; }
+  .closing-box h2 { font-size: clamp(28px, 3.4vw, 40px); }
+  .closing-box p { margin-top: 8px; color: var(--ink-soft); }
+  .closing-ctas { display: flex; flex-direction: column; gap: 10px; }
+  footer { padding: 40px 0 56px; font-size: 14px; color: var(--ink-soft); display: flex; flex-wrap: wrap; gap: 8px 26px; }
+  footer a { color: var(--ink-soft); }
+  footer span { margin-right: auto; }
+
+  @media (max-width: 960px) {
+    .hero, .steps, .split, .split.flip { grid-template-columns: minmax(0, 1fr); gap: 40px; }
+    .split.flip .split-text { order: 0; }
+    .step-shot { position: static; order: -1; }
+    .promises { grid-template-columns: minmax(0, 1fr); }
+    .closing-box { grid-template-columns: minmax(0, 1fr); padding: 32px; }
+    .closing-ctas { flex-direction: row; flex-wrap: wrap; }
+  }
+  @media (max-width: 640px) {
+    .wrap { padding: 0 18px; }
+    .nav-links a:not(.gh) { display: none; }
+    .hero { padding: 24px 0 64px; }
+    section { padding: 64px 0; }
+    .stage { height: 560px; padding: 14px; }
+    .win-actions { justify-content: flex-end; }
+    .groups { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .win-actions { flex-wrap: wrap; }
+    .win-msg { flex-basis: 100%; }
+    .ai-table thead { display: none; }
+    .ai-table tr { display: block; border-top: 1px solid var(--stone-deep); padding: 12px 0; }
+    .ai-table th, .ai-table td { display: block; border: 0; padding: 3px 0; }
+    .hero-ctas .btn, .closing-ctas .btn { width: 100%; }
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <nav>
-    <a class="brand" href="./"><img src="icon.png" alt="">Onyx</a>
-    <div class="links"><a href="#features">Features</a><a href="https://github.com/Barbaqueda/onyx">GitHub</a></div>
+  <nav class="nav" aria-label="Main">
+    <a class="logo" href="./"><img src="icon.png" alt="">Onyx</a>
+    <div class="nav-links">
+      <a href="#how">How it works</a>
+      <a href="#explorer">Explorer</a>
+      <a href="#faq">Questions</a>
+      <a class="gh" href="https://github.com/Barbaqueda/onyx">GitHub</a>
+    </div>
   </nav>
 
-  <section class="hero">
-    <h1>A file organizer that <em>asks before it moves anything.</em></h1>
-    <p class="lede">Onyx plans a clean folder structure for a messy folder, shows you every move before it happens, and puts everything back with one click if you change your mind.</p>
-    <div class="cta">
-      <a class="btn primary" href="https://github.com/Barbaqueda/onyx/releases/latest">Download for Windows</a>
-      <a class="btn" href="https://github.com/Barbaqueda/onyx">View on GitHub</a>
+  <header class="hero">
+    <div>
+      <h1>Tidy any folder.<span>Nothing moves until you say so.</span></h1>
+      <p class="hero-lede">Onyx looks at a messy folder, plans where everything should go, and shows you every move first. Keep what you like, apply it, and undo the whole thing with one click.</p>
+      <div class="hero-ctas">
+        <a class="btn btn-primary" href="https://github.com/Barbaqueda/onyx/releases/latest">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+          Download for Windows</a>
+        <a class="btn" href="https://github.com/Barbaqueda/onyx">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.69 5.39-5.25 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></svg>
+          View on GitHub</a>
+      </div>
+      <p class="hero-fine" id="version">Free for personal use, for Windows 10 and 11. No installer needed.</p>
     </div>
-    <p class="note">Free for personal use · Windows 10 and 11 · no installer</p>
-    <div class="demo"><img src="demo.gif" alt="Making a plan, unticking two moves, applying, and undoing it all" width="960" height="570"></div>
-  </section>
 
-  <section class="how">
-    <h2>Plan, review, apply, undo</h2>
+    <div class="window" role="region" aria-label="Try it on a pretend Downloads folder">
+      <div class="win-bar"><img src="icon.png" alt=""><span class="win-title">Downloads</span><span class="win-count" id="count">17 files</span></div>
+      <div class="stage" id="stage" data-state="messy">
+        <div class="pile" id="pile"></div>
+        <div class="groups" id="groups" hidden></div>
+        <p class="stage-hint">Click a file to keep it where it is.</p>
+      </div>
+      <div class="win-actions">
+        <span class="win-msg" id="msg" aria-live="polite">A messy Downloads folder. Try organizing it.</span>
+        <button class="wbtn" id="discard" hidden>Discard</button>
+        <button class="wbtn go" id="go">Make a plan</button>
+      </div>
+    </div>
+  </header>
+</div>
+
+<hr class="rule">
+
+<section id="how">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2>Four steps, and you decide at every one</h2>
+      <p class="lede">The app works just like the demo above, on your real folders.</p>
+    </div>
     <div class="steps">
-      <span class="step"><b>1</b> Open a messy folder</span>
-      <span class="step"><b>2</b> Onyx plans where things go</span>
-      <span class="step"><b>3</b> Untick anything you don't like</span>
-      <span class="step"><b>4</b> Apply, or undo it all</span>
+      <ol class="step-list" role="tablist" aria-label="How Onyx works" aria-orientation="vertical" id="stepList">
+        <li><button class="step-btn" role="tab" aria-selected="true" aria-controls="stepShot" data-img="overview.png" data-alt="Choosing how to sort a folder"><span class="n">1</span><span class="t">Choose how to sort</span><span class="d">AI that reads names and your existing folders, offline rules, or simply by type, date or size.</span></button></li>
+        <li><button class="step-btn" role="tab" aria-selected="false" aria-controls="stepShot" tabindex="-1" data-img="hero.png" data-alt="Reviewing the plan as a folder tree"><span class="n">2</span><span class="t">Review the plan</span><span class="d">See the new folders or every single move, with the reason for each. Untick anything you disagree with.</span></button></li>
+        <li><button class="step-btn" role="tab" aria-selected="false" aria-controls="stepShot" tabindex="-1" data-img="step-apply.png" data-alt="The folder after applying, with an Undo button"><span class="n">3</span><span class="t">Apply</span><span class="d">Only the moves you kept happen. If a name is taken, nothing is overwritten.</span></button></li>
+        <li><button class="step-btn" role="tab" aria-selected="false" aria-controls="stepShot" tabindex="-1" data-img="step-undo.png" data-alt="Every file back where it was after undo"><span class="n">4</span><span class="t">Undo, any time</span><span class="d">One click puts every file back, even after you restart Onyx.</span></button></li>
+      </ol>
+      <div class="step-shot">
+        <div class="shot" id="stepShot" role="tabpanel"><img src="overview.png" alt="Choosing how to sort a folder" width="1440" height="900"></div>
+      </div>
     </div>
-  </section>
+  </div>
+</section>
 
-  <section class="features" id="features">
-    <div class="card"><h3>Understands what things are</h3><p>It reads names and the folders you already have, so invoices land in Finance and photos join your existing Photos folder. Projects and apps stay together.</p></div>
-    <div class="card"><h3>Nothing moves without you</h3><p>Every move is listed before anything happens. Nothing is ever overwritten, and one click restores everything, even after a restart.</p></div>
-    <div class="card"><h3>AI that can stay on your PC</h3><p>Use offline rules, an online AI, or a model running on your own computer with Ollama, so your file names never leave it.</p></div>
-    <div class="card"><h3>A better file explorer</h3><p>Tags, previews for pictures, PDFs, video and text, Ctrl+K quick find, and the File Explorer shortcuts you already know.</p></div>
-  </section>
+<section class="safe" aria-labelledby="safe-h">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2 id="safe-h">Made for people who don't trust file organizers</h2>
+      <p class="lede">Most organizers move first and never ask. Onyx was designed the other way round.</p>
+    </div>
+    <div class="promises">
+      <div class="promise"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg><div><h3>Planning never touches a file</h3><p>Make as many plans as you like. Nothing on disk changes until you press Apply.</p></div></div>
+      <div class="promise"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg><div><h3>Every apply can be undone</h3><p>Files you've edited since go back with your edits. Anything you moved yourself is skipped and listed, never guessed at.</p></div></div>
+      <div class="promise"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg><div><h3>Nothing is ever overwritten</h3><p>If a name is taken, the file becomes "report (2).pdf". Deleted files go to the Recycle Bin.</p></div></div>
+      <div class="promise"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg><div><h3>Projects stay in one piece</h3><p>Code projects, websites, games and 3D models with their textures are kept together, and folders you named yourself are left alone.</p></div></div>
+      <div class="promise"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg><div><h3>System folders are off limits</h3><p>Onyx won't reorganize a drive, Windows, Program Files or your whole user folder. You can still browse and search them.</p></div></div>
+      <div class="promise"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><div><h3>The AI only sees names</h3><p>File names, sizes and dates, never what's inside. Or run the AI on your own PC and nothing leaves it at all.</p></div></div>
+    </div>
+  </div>
+</section>
 
-  <section class="shots">
-    <img src="library.png" alt="The Library with tags and a preview">
-    <img src="hero.png" alt="Reviewing a plan on the Organize screen">
-  </section>
+<section id="explorer">
+  <div class="wrap split">
+    <div class="split-text">
+      <h2>Once it's tidy, it stays useful</h2>
+      <p class="lede">Onyx doubles as a file explorer that understands what your files are about.</p>
+      <ul class="feature-list">
+        <li><b>Tags, added for you</b><span>Invoices, screenshots and tax files get tagged from their names automatically, and AI can tag by project or topic.</span></li>
+        <li><b>Find anything in a second</b><span>Press <kbd>Ctrl</kbd> <kbd>K</kbd> and type part of a name or a tag, or search for things like <code>#invoice type:pdf</code>.</span></li>
+        <li><b>Look without opening</b><span>Press <kbd>Space</kbd> to preview pictures, PDFs, video, sound and text, and flip through with the arrow keys.</span></li>
+        <li><b>The Explorer you already know</b><span>Rename, cut, copy, paste, drag and drop, Properties and the Windows right-click menu, with the same shortcuts.</span></li>
+      </ul>
+    </div>
+    <div class="shot"><img src="library.png" alt="The Library: files with tags and a preview" width="1440" height="900" loading="lazy"></div>
+  </div>
+</section>
 
+<hr class="rule">
+
+<section id="ai">
+  <div class="wrap split flip">
+    <div class="split-text">
+      <h2>Use AI, or don't</h2>
+      <p class="lede">Onyx works fully offline. AI makes the folder names smarter, and you choose where it runs.</p>
+      <table class="ai-table">
+        <thead><tr><th scope="col">Option</th><th scope="col">What it's like</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Offline rules</th><td>Instant and private. Groups series, keywords and file types.</td></tr>
+          <tr><th scope="row">AI on your PC</th><td><span class="tick">Private and free.</span> The build script can set up Ollama and pick a model that suits your computer.</td></tr>
+          <tr><th scope="row">Online AI</th><td>The sharpest folder names. Free without a key, or bring your own.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="shot"><img src="ai-local.png" alt="Settings showing AI running on this PC with Ollama" width="980" height="612" loading="lazy"></div>
+  </div>
+</section>
+
+<hr class="rule">
+
+<section id="faq">
+  <div class="wrap">
+    <div class="sec-head"><h2>Questions</h2></div>
+    <div class="faq">
+      <details><summary>Is it really free?</summary><p>Yes, for personal use. You can download it, run it and tweak your own copy. Using it inside a business or redistributing it needs permission.</p></details>
+      <details><summary>Windows says it "protected your PC". Is that normal?</summary><p>Yes. Onyx isn't signed with a paid code-signing certificate yet, so Windows warns about it like any new app. Click More info, then Run anyway. The full source code is public on GitHub if you'd like to look first.</p></details>
+      <details><summary>What if I don't like the result?</summary><p>Press Undo and every file goes back where it was. Files you've changed since keep your changes, and nothing is ever overwritten.</p></details>
+      <details><summary>What does the AI see?</summary><p>File names, sizes and dates, never what's inside your files. With AI on your PC, nothing leaves your computer at all, and the offline rules send nothing anywhere.</p></details>
+      <details><summary>Does it work with Obsidian?</summary><p>It isn't a plugin, but it was built in the same spirit: a graph view, tags, a command palette, docked panels and themes you can rebuild. It sits comfortably next to a vault, for the files around it.</p></details>
+      <details><summary>Can I try it without touching my files?</summary><p>Yes. On the start screen, choose Try the demo: a messy folder that only exists in memory.</p></details>
+    </div>
+  </div>
+</section>
+
+<section class="closing">
+  <div class="wrap">
+    <div class="closing-box">
+      <img src="icon.png" alt="">
+      <div><h2>Give your Downloads folder a fresh start</h2><p>Unzip it, open Onyx.exe and pick a folder. It takes a minute.</p></div>
+      <div class="closing-ctas">
+        <a class="btn btn-primary" href="https://github.com/Barbaqueda/onyx/releases/latest">Download for Windows</a>
+        <a class="btn" href="https://github.com/Barbaqueda/onyx">Star on GitHub</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="wrap">
   <footer>
-    Made by <a href="https://github.com/Barbaqueda">Alexander Dunn</a> · <a href="https://github.com/Barbaqueda/onyx/blob/main/LICENSE">Free for personal use</a> · <a href="https://github.com/Barbaqueda/onyx/issues">Report a problem</a>
+    <span>Made by <a href="https://github.com/Barbaqueda">Alexander Dunn</a></span>
+    <a href="https://github.com/Barbaqueda/onyx/blob/main/LICENSE">License</a>
+    <a href="https://github.com/Barbaqueda/onyx/issues/new/choose">Report a problem</a>
+    <a href="https://github.com/Barbaqueda/onyx/releases">All releases</a>
   </footer>
 </div>
+
+<script>
+(function () {
+  'use strict';
+  // ---------------------------------------------------------------- the live demo
+  const ICON = {
+    img: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/>',
+    doc: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/>',
+    sound: '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
+    app: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/>',
+    cube: '<path d="M21 8 12 3 3 8v8l9 5 9-5Z"/><path d="m3 8 9 5 9-5"/><path d="M12 13v8"/>',
+    sheet: '<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18"/>',
+    folder: '<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>',
+  };
+  const svg = n => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + ICON[n] + '</svg>';
+  const FILES = [
+    ['IMG_4521.jpg', 'img', 'Photos'], ['tax_return_2023.pdf', 'doc', 'Finance'], ['song draft01.wav', 'sound', 'Music'],
+    ['OBS_Setup_31.0.exe', 'app', 'Installers'], ['kickoff.pptx', 'doc', 'Work'], ['excavatorio1.obj', 'cube', '3D Models'],
+    ['Screenshot 2026-09-30.png', 'img', 'Photos'], ['invoice_march.pdf', 'doc', 'Finance'], ['vlc-3.0.21-win64.exe', 'app', 'Installers'],
+    ['meeting_agenda.docx', 'doc', 'Work'], ['song draft02.wav', 'sound', 'Music'], ['budget_2024.xlsx', 'sheet', 'Finance'],
+    ['IMG_4522.jpg', 'img', 'Photos'], ['excavatorio2.obj', 'cube', '3D Models'], ['lecture-notes.md', 'doc', 'School'],
+    ['boarding_pass.pdf', 'doc', 'Travel'], ['essay_final_v3.docx', 'doc', 'School'],
+  ];
+  const ORDER = ['Finance', 'Photos', 'Work', 'Installers', 'Music', 'School', '3D Models', 'Travel'];
+  const stage = document.getElementById('stage'), pile = document.getElementById('pile'), groups = document.getElementById('groups');
+  const go = document.getElementById('go'), discard = document.getElementById('discard'), msg = document.getElementById('msg'), count = document.getElementById('count');
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const els = FILES.map(([name, icon, dest]) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'file'; b.tabIndex = -1;
+    b.dataset.dest = dest;
+    b.style.setProperty('--tilt', (((name.length * 37) % 9) - 4) * 0.35 + 'deg');   // a slightly scattered pile
+    b.innerHTML = svg(icon) + '<span class="fname">' + name + '</span><span class="to">to ' + dest + '</span>';
+    b.addEventListener('click', () => {
+      if (stage.dataset.state !== 'plan') return;
+      const kept = b.classList.toggle('kept');
+      b.setAttribute('aria-pressed', kept);
+      b.setAttribute('aria-label', name + (kept ? ', kept where it is' : ', moves to ' + dest));
+      update();
+    });
+    return b;
+  });
+  els.forEach(e => pile.appendChild(e));
+
+  // move files between layouts with a FLIP animation, so you can watch each one travel to its folder
+  function flip(change) {
+    const first = new Map(els.map(e => [e, e.getBoundingClientRect()]));
+    change();
+    if (reduce.matches || !Element.prototype.animate) return;
+    els.forEach((e, i) => {
+      const a = first.get(e), b = e.getBoundingClientRect();
+      const dx = a.left - b.left, dy = a.top - b.top;
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+      e.animate([{ transform: 'translate(' + dx + 'px,' + dy + 'px)' }, { transform: 'none' }],
+        { duration: 640, delay: i * 24, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'backwards' });
+    });
+  }
+  const moving = () => els.filter(e => !e.classList.contains('kept'));
+  const kept = () => els.filter(e => e.classList.contains('kept'));
+  function update() {
+    const s = stage.dataset.state, n = moving().length;
+    discard.hidden = s !== 'plan';
+    go.disabled = false;
+    if (s === 'messy') { go.textContent = 'Make a plan'; count.textContent = els.length + ' files'; }
+    if (s === 'plan') {
+      go.textContent = n ? 'Apply ' + n + (n === 1 ? ' move' : ' moves') : 'Nothing to move';
+      go.disabled = !n;
+      const folders = new Set(moving().map(e => e.dataset.dest)).size;
+      msg.innerHTML = '<b>' + n + ' of ' + els.length + ' files</b> into ' + folders + (folders === 1 ? ' folder' : ' folders');
+    }
+    if (s === 'applied') { go.textContent = 'Undo'; msg.innerHTML = '<span class="ok">Moved ' + n + (n === 1 ? ' file' : ' files') + '.</span> Nothing was overwritten.'; }
+  }
+  function toPlan() {
+    stage.dataset.state = 'plan';
+    els.forEach(e => { e.tabIndex = 0; e.setAttribute('aria-pressed', 'false'); e.setAttribute('aria-label', e.querySelector('.fname').textContent + ', moves to ' + e.dataset.dest); });
+    update();
+  }
+  function group(title, files, muted) {
+    const g = document.createElement('div');
+    g.innerHTML = '<div class="group-name"' + (muted ? ' style="color:var(--on-onyx-soft)"' : '') + '>' + (muted ? '' : svg('folder')) + title + '<em>' + files.length + '</em></div><div class="group-files"></div>';
+    files.forEach(f => g.lastChild.appendChild(f));
+    groups.appendChild(g);
+  }
+  function apply() {
+    const n = moving().length;
+    flip(() => {
+      groups.innerHTML = '';
+      for (const name of ORDER) { const files = moving().filter(e => e.dataset.dest === name); if (files.length) group(name, files); }
+      if (kept().length) group('Left where they were', kept(), true);
+      pile.hidden = true; groups.hidden = false;
+      els.forEach(e => { e.tabIndex = -1; e.removeAttribute('aria-pressed'); e.removeAttribute('aria-label'); });
+      stage.dataset.state = 'applied';
+    });
+    count.textContent = new Set(moving().map(e => e.dataset.dest)).size + ' folders';
+    update();
+    go.focus();
+  }
+  function undo() {
+    flip(() => {
+      els.forEach(e => { e.classList.remove('kept'); pile.appendChild(e); });
+      groups.hidden = true; pile.hidden = false; groups.innerHTML = '';
+      stage.dataset.state = 'messy';
+    });
+    update();
+    msg.innerHTML = '<span class="ok">Every file is back where it was.</span>';
+  }
+  go.addEventListener('click', () => {
+    const s = stage.dataset.state;
+    if (s === 'messy') toPlan(); else if (s === 'plan') apply(); else undo();
+  });
+  discard.addEventListener('click', () => {
+    els.forEach(e => { e.classList.remove('kept'); e.tabIndex = -1; e.removeAttribute('aria-pressed'); e.removeAttribute('aria-label'); });
+    stage.dataset.state = 'messy'; update();
+    msg.textContent = 'Plan discarded. Nothing moved.';
+  });
+
+  // ---------------------------------------------------------------- how it works: tabs
+  const tabs = [...document.querySelectorAll('#stepList .step-btn')];
+  const shot = document.querySelector('#stepShot img');
+  tabs.forEach(t => { new Image().src = t.dataset.img; });
+  function select(t, focus) {
+    tabs.forEach(x => { const on = x === t; x.setAttribute('aria-selected', on); x.tabIndex = on ? 0 : -1; });
+    shot.src = t.dataset.img; shot.alt = t.dataset.alt;
+    if (focus) t.focus();
+  }
+  tabs.forEach((t, i) => {
+    t.addEventListener('click', () => select(t));
+    t.addEventListener('keydown', e => {
+      const d = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
+      if (d) { e.preventDefault(); select(tabs[(i + d + tabs.length) % tabs.length], true); }
+    });
+  });
+
+  // ---------------------------------------------------------------- the current version, straight from GitHub
+  fetch('https://api.github.com/repos/Barbaqueda/onyx/releases/latest').then(r => r.ok ? r.json() : null).then(r => {
+    if (!r || !r.assets) return;
+    const zip = r.assets.find(a => /\.zip$/i.test(a.name));
+    const mb = zip ? Math.round(zip.size / 1048576) : 0;
+    const v = ((r.name || r.tag_name || '').match(/\d+(\.\d+)+/) || [''])[0];
+    document.getElementById('version').textContent = (v ? 'Version ' + v + (mb ? ', ' + mb + ' MB. ' : '. ') : '') + 'Free for personal use, for Windows 10 and 11.';
+    if (zip) document.querySelectorAll('a[href$="/releases/latest"]').forEach(a => { a.href = zip.browser_download_url; });
+  }).catch(() => {});
+})();
+</script>
 </body>
 </html>
