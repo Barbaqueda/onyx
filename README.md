@@ -31,7 +31,7 @@ Once things are tidy, Onyx stays useful as **a better file explorer**: every fil
 
 <p align="center">
   <img src="docs/demo.gif" alt="Onyx in 15 seconds: make a plan, untick two moves, apply, then undo everything with one click" width="100%">
-  <br><sub>Make a plan, untick what you don't want, apply, and undo it all with one click.</sub>
+  <br><sub>it never overwrites something that’s now sitting at the original spot. Never lose your files or their position.</sub>
 </p>
 
 <br>
