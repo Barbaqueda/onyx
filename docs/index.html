@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Onyx: a file organizer that asks before it moves anything</title>
+<meta name="description" content="Onyx plans a clean folder structure for a messy folder, shows you every move, and undoes it all in one click. Free for personal use, for Windows.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Onyx">
+<meta property="og:url" content="https://barbaqueda.github.io/onyx/">
+<meta property="og:title" content="Onyx: a file organizer that asks before it moves anything">
+<meta property="og:description" content="Plan a clean folder structure, review every move, apply, and undo it all in one click. Free for personal use, for Windows.">
+<meta property="og:image" content="https://barbaqueda.github.io/onyx/social-preview.png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="640">
+<meta property="og:image:alt" content="Onyx: a file organizer that asks before it moves anything">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Onyx: a file organizer that asks before it moves anything">
+<meta name="twitter:description" content="Plan a clean folder structure, review every move, apply, and undo it all in one click.">
+<meta name="twitter:image" content="https://barbaqueda.github.io/onyx/social-preview.png">
+<link rel="icon" href="icon.png">
+<style>
+:root { --bg:#0d0d10; --panel:#16161b; --line:#2a2a33; --text:#f2f2f5; --muted:#a9aab6; --accent:#8f9cf9; --accent-2:#a3aefa; }
+* { box-sizing:border-box; margin:0; }
+body { background:var(--bg); color:var(--text); font-family:Inter, "Segoe UI", system-ui, -apple-system, sans-serif; line-height:1.55; }
+body::before { content:""; position:fixed; inset:-30% auto auto -20%; width:900px; height:900px; background:radial-gradient(closest-side, rgba(143,156,249,.16), transparent); pointer-events:none; z-index:-1; }
+a { color:inherit; }
+.wrap { max-width:1080px; margin:0 auto; padding:0 24px; }
+nav { display:flex; align-items:center; justify-content:space-between; padding:22px 0; }
+.brand { display:flex; align-items:center; gap:10px; font-weight:800; font-size:20px; text-decoration:none; }
+.brand img { width:30px; height:30px; }
+nav .links a { color:var(--muted); text-decoration:none; margin-left:22px; font-size:15px; }
+nav .links a:hover { color:var(--text); }
+.hero { text-align:center; padding:56px 0 34px; }
+h1 { font-size:clamp(34px, 6vw, 60px); line-height:1.08; letter-spacing:-.03em; font-weight:800; max-width:820px; margin:0 auto; }
+h1 em { font-style:normal; color:var(--accent-2); }
+.lede { color:var(--muted); font-size:clamp(17px, 2.2vw, 20px); max-width:640px; margin:20px auto 0; }
+.cta { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; margin-top:30px; }
+.btn { display:inline-flex; align-items:center; gap:8px; padding:13px 22px; border-radius:10px; font-weight:650; font-size:16px; text-decoration:none; border:1px solid var(--line); background:var(--panel); }
+.btn:hover { border-color:#3c3c48; }
+.btn.primary { background:var(--accent); color:#0d0d10; border-color:transparent; }
+.btn.primary:hover { background:var(--accent-2); }
+.note { color:var(--muted); font-size:13px; margin-top:12px; }
+.demo { margin:44px auto 0; border-radius:14px; overflow:hidden; border:1px solid var(--line); box-shadow:0 30px 80px rgba(0,0,0,.55); }
+.demo img { display:block; width:100%; height:auto; }
+.features { display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:16px; margin:72px 0 0; }
+.card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:22px; }
+.card h3 { font-size:17px; margin-bottom:6px; }
+.card p { color:var(--muted); font-size:15px; }
+.shots { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:16px; }
+.shots img { width:100%; border-radius:12px; border:1px solid var(--line); display:block; }
+.how { margin-top:72px; text-align:center; }
+.how h2 { font-size:30px; letter-spacing:-.02em; }
+.steps { display:flex; justify-content:center; gap:10px; flex-wrap:wrap; margin-top:20px; }
+.step { padding:9px 16px; border-radius:999px; background:var(--panel); border:1px solid var(--line); color:var(--muted); font-size:15px; }
+.step b { color:var(--text); }
+footer { color:var(--muted); font-size:14px; text-align:center; padding:72px 0 40px; }
+footer a { color:var(--muted); }
+@media (max-width:700px) { .shots { grid-template-columns:1fr; } nav .links a:not(:last-child) { display:none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav>
+    <a class="brand" href="./"><img src="icon.png" alt="">Onyx</a>
+    <div class="links"><a href="#features">Features</a><a href="https://github.com/Barbaqueda/onyx">GitHub</a></div>
+  </nav>
+
+  <section class="hero">
+    <h1>A file organizer that <em>asks before it moves anything.</em></h1>
+    <p class="lede">Onyx plans a clean folder structure for a messy folder, shows you every move before it happens, and puts everything back with one click if you change your mind.</p>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/Barbaqueda/onyx/releases/latest">Download for Windows</a>
+      <a class="btn" href="https://github.com/Barbaqueda/onyx">View on GitHub</a>
+    </div>
+    <p class="note">Free for personal use · Windows 10 and 11 · no installer</p>
+    <div class="demo"><img src="demo.gif" alt="Making a plan, unticking two moves, applying, and undoing it all" width="960" height="570"></div>
+  </section>
+
+  <section class="how">
+    <h2>Plan, review, apply, undo</h2>
+    <div class="steps">
+      <span class="step"><b>1</b> Open a messy folder</span>
+      <span class="step"><b>2</b> Onyx plans where things go</span>
+      <span class="step"><b>3</b> Untick anything you don't like</span>
+      <span class="step"><b>4</b> Apply, or undo it all</span>
+    </div>
+  </section>
+
+  <section class="features" id="features">
+    <div class="card"><h3>Understands what things are</h3><p>It reads names and the folders you already have, so invoices land in Finance and photos join your existing Photos folder. Projects and apps stay together.</p></div>
+    <div class="card"><h3>Nothing moves without you</h3><p>Every move is listed before anything happens. Nothing is ever overwritten, and one click restores everything, even after a restart.</p></div>
+    <div class="card"><h3>AI that can stay on your PC</h3><p>Use offline rules, an online AI, or a model running on your own computer with Ollama, so your file names never leave it.</p></div>
+    <div class="card"><h3>A better file explorer</h3><p>Tags, previews for pictures, PDFs, video and text, Ctrl+K quick find, and the File Explorer shortcuts you already know.</p></div>
+  </section>
+
+  <section class="shots">
+    <img src="library.png" alt="The Library with tags and a preview">
+    <img src="hero.png" alt="Reviewing a plan on the Organize screen">
+  </section>
+
+  <footer>
+    Made by <a href="https://github.com/Barbaqueda">Alexander Dunn</a> · <a href="https://github.com/Barbaqueda/onyx/blob/main/LICENSE">Free for personal use</a> · <a href="https://github.com/Barbaqueda/onyx/issues">Report a problem</a>
+  </footer>
+</div>
+</body>
+</html>
