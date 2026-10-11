@@ -25,6 +25,8 @@
 
 Your Downloads folder is a mess, and every tool that promises to fix it either dumps everything into `Images/` and `Documents/` or moves things without asking. **Onyx is different.** It reads names and the folders you already have, and it plans a structure that makes sense. Nothing on disk moves until you've seen every change and said yes. And if you change your mind, one click puts everything back.
 
+**At home next to Obsidian.** Onyx isn't an Obsidian plugin and wasn't built specifically for it, but it looks and feels like it belongs in the same ecosystem: a dark, minimal interface, a graph view, tags, a <kbd>Ctrl</kbd> <kbd>P</kbd> command palette, dockable panels and themes you can rebuild. If you keep notes in Obsidian, Onyx is a familiar-feeling way to keep the files around your vault tidy.
+
 Once things are tidy, Onyx stays useful as **a better file explorer**: every file searchable in one box, tagged by hand or by AI, with previews, saved searches, and a <kbd>Ctrl</kbd> <kbd>K</kbd> quick find that gets you to any file in a second.
 
 <p align="center">
