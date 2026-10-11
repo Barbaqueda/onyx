@@ -1224,3 +1224,5 @@ body.no-vault .tab-header .tabs { visibility: hidden; }
 .ext-badge.err { background: rgba(var(--red-rgb), .16); color: var(--red); }
 .ok-text { color: var(--green); font-weight: 600; }
 .err-text { color: var(--orange); font-weight: 600; }
+.viewer.is-docked .vw-bar [data-tool="0"], .viewer.is-docked .vw-bar [data-tool="1"], .viewer.is-docked .vw-bar [data-tool="2"] { display: none; }
+.vw-title { overflow: hidden; }

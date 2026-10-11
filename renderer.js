@@ -936,8 +936,20 @@
     it.skip = val == null ? !it.skip : val;
     renderExplorer(); renderSide(); renderStatus(); updateCounts();
     if (WS.isVisible('changes')) renderOne('changes');
-    if (WS.isVisible('structure')) { const t = $('#proposedTree'); if (t) t.innerHTML = proposedTreeHTML(); }
+    if (WS.isVisible('structure')) {
+      const t = $('#proposedTree');
+      if (t) t.innerHTML = proposedTreeHTML(); else renderOne('structure');
+      updateOrgBar();
+    }
     if (WS.isVisible('graph')) renderOne('graph');
+  }
+  // the Apply bar's count follows every tick and untick
+  function updateOrgBar() {
+    const P = S.plan, bar = document.querySelector('.org-bar'); if (!P || !bar) return;
+    const all = P.items.filter(i => i.kind === 'move'), moving = P.items.filter(isMoving).length, sel = all.filter(i => !i.skip).length;
+    const t = bar.querySelector('.org-bar-text'); if (t && t.firstChild) t.firstChild.textContent = all.length ? sel + ' of ' + plural(all.length, 'move') + ' selected' : 'Nothing to move';
+    const b = bar.querySelector('[data-action="apply"]'); if (b) { b.lastChild.textContent = 'Apply ' + (moving ? plural(moving, 'move') : ''); b.disabled = !!(P.demo || !moving || S.busy); }
+    const lede = document.querySelector('.changes-toolbar .summary'); if (lede) lede.textContent = sel + ' of ' + all.length + ' moves selected';
   }
   function ruleFromFile(source) {
     const f = S.vault.files.find(x => x.path === source); if (!f) return;
@@ -1102,7 +1114,7 @@
     modal({
       title: 'Apply changes?',
       html: '<p>Onyx will move <b>' + plural(items.length, 'file') + '</b>' + (nf.size ? ' into <b>' + plural(nf.size, 'new folder') + '</b>' : '') + ' inside <b>' + esc(S.vault.vaultName) + '</b>.</p>' +
-        '<p style="margin-top:8px">Nothing is deleted or overwritten. If a name is taken, the file gets a “(2)” suffix. You can undo this from the sidebar.</p>',
+        '<p style="margin-top:8px">Nothing is deleted or overwritten. If a name is taken, the file gets a “(2)” suffix. You can undo it with one click afterwards.</p>',
       buttons: [{ label: 'Cancel' }, { label: 'Move ' + plural(items.length, 'file'), cls: 'mod-cta', action: () => { doApply(); } }],
     });
   }
@@ -1185,10 +1197,10 @@
     ...STRATEGIES.map(s => ({ id: 'organize-' + s.id, name: 'Organize: ' + s.name, run: () => organize(s.id) })),
     { id: 'apply', name: 'Plan: Apply changes', hk: 'Mod+Shift+Enter', run: () => confirmApply() },
     { id: 'discard', name: 'Plan: Discard proposed changes', run: () => { S.plan = null; renderAll(); } },
-    { id: 'view-structure', name: 'View: Proposed structure', hk: 'Mod+1', run: () => WS.activate('structure') },
-    { id: 'view-changes', name: 'View: Changes', hk: 'Mod+2', run: () => showMoves() },
+    { id: 'view-structure', name: 'View: Organize', hk: 'Mod+1', run: () => WS.activate('structure') },
+    { id: 'view-changes', name: 'View: Every move', hk: 'Mod+2', run: () => showMoves() },
     { id: 'view-graph', name: 'View: Graph view', hk: 'Mod+G', run: () => WS.activate('graph') },
-    { id: 'view-files', name: 'View: Files', hk: 'Mod+Shift+E', run: () => { WS.activate('files'); focusTree($('#explorer')); } },
+    { id: 'view-files', name: 'View: Folders', hk: 'Mod+Shift+E', run: () => { WS.activate('files'); focusTree($('#explorer')); } },
     { id: 'view-organize', name: 'View: Organize panel', run: () => openOrganize() },
     { id: 'view-library', name: 'View: Library', hk: 'Mod+L', run: () => LIB.showLibrary() },
     { id: 'view-tags', name: 'View: Tags panel', run: () => WS.activate('tags') },
@@ -1214,7 +1226,7 @@
     { id: 'properties', name: 'Files: Properties (Alt+Enter)', run: () => window.OnyxOps.properties() },
     { id: 'terminal', name: 'Files: Open in Terminal', run: () => window.OnyxOps && S.vault && api.fsTerminal(LIB.cwd).then(r => r && r.error && notice(esc(r.error), 'error')) },
     { id: 'rescan', name: 'Files: Reload folder from disk', hk: 'Mod+R', run: rescan },
-    { id: 'search-files', name: 'Files: Search files', hk: 'Mod+Shift+F', run: () => searchLibrary() },
+    { id: 'search-files', name: 'Library: Search (all files)', hk: 'Mod+Shift+F', run: () => searchLibrary() },
     { id: 'collapse-explorer', name: 'Files: Collapse all', run: () => { S.explorerOpen.clear(); renderExplorer(); } },
     { id: 'reveal-root', name: 'Files: Show vault in system explorer', run: () => { if (S.vault && !S.vault.demo) api.reveal(''); else notice('Open a real folder first', 'warn'); } },
     { id: 'toggle-left', name: 'Layout: Toggle left sidebar', hk: 'Mod+[', run: () => toggleSidebar('left') },
