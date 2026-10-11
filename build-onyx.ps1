@@ -283,4 +283,8 @@ try {
 
 Step 'Done'
 Write-Host "Onyx is ready: $Dest\Onyx.exe" -ForegroundColor Green
-Start-Process (Join-Path $Dest 'Onyx.exe') -WorkingDirectory $Dest
+# The first launch right after building runs as administrator, which some PCs need for Onyx to start the first time.
+# If the Windows prompt is declined, Onyx starts normally instead.
+Write-Host 'Starting Onyx (Windows will ask for permission)...'
+try { Start-Process -FilePath (Join-Path $Dest 'Onyx.exe') -WorkingDirectory $Dest -Verb RunAs -ErrorAction Stop }
+catch { Write-Host 'Starting Onyx without administrator rights.' -ForegroundColor Yellow; Start-Process -FilePath (Join-Path $Dest 'Onyx.exe') -WorkingDirectory $Dest }
