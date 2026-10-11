@@ -30,7 +30,8 @@ Your Downloads folder is a mess, and every tool that promises to fix it either d
 Once things are tidy, Onyx stays useful as **a better file explorer**: every file searchable in one box, tagged by hand or by AI, with previews, saved searches, and a <kbd>Ctrl</kbd> <kbd>K</kbd> quick find that gets you to any file in a second.
 
 <p align="center">
-  <img src="docs/hero.png" alt="Onyx showing a proposed folder structure next to a graph of the result" width="100%">
+  <img src="docs/demo.gif" alt="Onyx in 15 seconds: make a plan, untick two moves, apply, then undo everything with one click" width="100%">
+  <br><sub>Make a plan, untick what you don't want, apply, and undo it all with one click.</sub>
 </p>
 
 <br>
@@ -79,7 +80,7 @@ The download is cached in `%LOCALAPPDATA%\onyx-build`, so running it again to up
 flowchart LR
     A["📂 Open a folder"] --> B["🔍 Scan<br/><sub>names, types, sizes,<br/>existing folders</sub>"]
     B --> C["✦ Plan<br/><sub>AI or offline rules</sub>"]
-    C --> D["👁 Review<br/><sub>tree · changes · graph</sub>"]
+    C --> D["👁 Review<br/><sub>folders · every move · graph</sub>"]
     D -->|tweak anything| C
     D --> E["✓ Apply"]
     E --> F["↶ Undo<br/><sub>any time</sub>"]
@@ -91,7 +92,11 @@ flowchart LR
 | **Plan** | It proposes where every file should go, reusing your folders wherever it can. |
 | **Review** | Everything happens on one Organize screen: pick a way to sort, make a plan, then see it as the new folders or as every single move (or explore it as a graph). Right-click anything to move it, keep it, or turn it into a rule. |
 | **Apply** | Only the moves you left checked happen. Name clashes become `file (2).pdf`; nothing is ever overwritten. |
-| **Undo** | Every apply writes a journal. One click restores everything exactly as it was. |
+| **Undo** | Every apply writes a journal, so one click puts every file back, even after restarting Onyx. Files you've edited since go back with your edits. If you moved, renamed or deleted one yourself, Onyx skips it and tells you instead of guessing, and it never overwrites something that's now in the original spot. Folders the plan created are removed once they're empty. |
+
+<p align="center">
+  <img src="docs/hero.png" alt="The Organize screen reviewing a plan: a summary, why the AI chose this structure, the new folders, and an Apply bar" width="100%">
+</p>
 
 <br>
 
@@ -108,12 +113,12 @@ Everything you do in Explorer works here too, with the same keys:
 - **Cut, copy, paste** (<kbd>Ctrl</kbd> <kbd>X</kbd> <kbd>C</kbd> <kbd>V</kbd>) **shared with Explorer's clipboard**: copy in Onyx, paste in Explorer, or the other way round. Pasting into the same folder makes *report - Copy.pdf*; names that already exist get **Replace / Skip / Keep both** (replaced files go to the Recycle Bin, folders merge).
 - **Delete to the Recycle Bin** (<kbd>Del</kbd>), or permanently with <kbd>Shift</kbd> <kbd>Del</kbd> after a warning.
 - **Undo** (<kbd>Ctrl</kbd> <kbd>Z</kbd>) for renames, moves, copies, new folders and deletes; a deleted file comes straight back out of the Recycle Bin.
-- **Drag and drop** onto folders, breadcrumbs or the Files tree (same drive moves, <kbd>Ctrl</kbd> copies), **out of Onyx** into Explorer, the desktop, email or any app, and **in from Explorer**.
+- **Drag and drop** onto folders, breadcrumbs or the Folders pane (same drive moves, <kbd>Ctrl</kbd> copies), **out of Onyx** into Explorer, the desktop, email or any app, and **in from Explorer**.
 - **Windows integration:** Properties (<kbd>Alt</kbd> <kbd>Enter</kbd>), Open with…, Run as administrator, Open in Terminal, Compress to ZIP / Extract all, Create shortcut, Copy as path (<kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>C</kbd>), and **Show more options** for Windows' own right-click menu (7-Zip, Send to, and everything else your apps add).
 - **Live:** changes made by other programs (a download finishing, a file saved in Explorer) show up on their own.
 
 ### Preview anything, with extensions
-Press <kbd>Space</kbd> (or double-click) to look at a file without leaving Onyx, and <kbd>←</kbd> <kbd>→</kbd> to flip through the folder. What Onyx can show comes from **extensions**, which you can turn on and off in **Settings → Extensions**:
+Press <kbd>Space</kbd> (or double-click) to look at a file without leaving Onyx, and <kbd>←</kbd> <kbd>→</kbd> to flip through the folder, with a filmstrip for pictures. Dock the preview beside the list and it follows whatever you select. What Onyx can show comes from **extensions**, which you can turn on and off in **Settings → Extensions**:
 
 - **Image Viewer:** zoom (wheel, <kbd>+</kbd> <kbd>−</kbd>, <kbd>1</kbd> for actual size, <kbd>0</kbd> to fit), drag to pan, rotate (<kbd>R</kbd>). HEIC, TIFF, PSD and camera RAW use the preview Windows makes.
 - **PDF Viewer:** the viewer from Chrome and Edge (pages, zoom, search, rotate, print), plus the first page in the details pane.
@@ -235,10 +240,10 @@ Keys are encrypted with Windows' own credential protection. AI answers are sanit
 
 ## 🎨 Make it yours
 
-Every panel is a tab you can **drag anywhere**: into either sidebar, into another tab bar, or onto the edge of a pane to split the window. Right-click a tab for the same options, or start from a preset: *Classic, Swapped, Review, Stacked, Focus*.
+Every panel is a tab you can **drag anywhere**: into either sidebar, into another tab bar, or onto the edge of a pane to split the window. Right-click a tab for the same options, or start from a preset: *Explorer, Classic, Explore, Swapped, Review, Stacked, Focus*. Previews can sit beside the file list too.
 
 <p align="center">
-  <img src="docs/layout.png" alt="Changes docked in the left sidebar, structure and graph split side by side" width="100%">
+  <img src="docs/layout.png" alt="A picture previewed beside the file list, with the Tags panel on the left" width="100%">
 </p>
 
 <table>
@@ -270,15 +275,15 @@ Eight dark (Onyx, Jet, Graphite, Lapis, Jade, Amber, Garnet, Amethyst) and four 
 
 | Section | Highlights |
 | --- | --- |
-| **General** | Reopen last folder on startup, what to show after organizing, confirm before applying, notification duration |
+| **General** | Reopen last folder on startup, how a new plan is shown, confirm before applying, notification duration |
 | **Appearance** | Themes, your own color schemes, accent, fonts, zoom, density, roundness, reduced motion |
 | **Layout** | Presets, where each panel lives, ribbon and status bar |
 | **File explorer** | Sort order, folders first, type tags, sizes, marks on files that will move, indent guides |
-| **Library &amp; tags** | Tag new files automatically, tag with AI, what double-click does, thumbnails, tag dots in the file tree, details panel |
+| **Library &amp; tags** | Tag new files automatically, tag with AI, what double-click does, thumbnails, columns, tag dots, details panel |
 | **Graph view** | Files and labels on or off, color by folder or type, node size, link distance, repel force, text fade |
 | **Organizing** | How deep to sort, series threshold, max depth, rename built-in folders (`Images` → `Pictures`) |
 | **My rules** | Keyword, extension, pattern, size and age rules; never-move list; folders to keep together or always sort inside |
-| **AI provider** | Provider, model, key, and your own instructions |
+| **AI provider** | Provider (including AI on this PC with Ollama), model, key, and your own instructions |
 | **Hotkeys** | Rebind any shortcut |
 | **Advanced** | Custom CSS, export and import settings, resets |
 
@@ -293,11 +298,11 @@ Settings are searchable (`Ctrl + ,`, then type).
 | --- | --- | --- | --- | --- |
 | Quick find a file | <kbd>Ctrl</kbd> <kbd>K</kbd> | | Library | <kbd>Ctrl</kbd> <kbd>L</kbd> |
 | Search the Library | <kbd>Ctrl</kbd> <kbd>F</kbd> | | Tag selected files | <kbd>Ctrl</kbd> <kbd>T</kbd> or <kbd>#</kbd> |
-| Command palette | <kbd>Ctrl</kbd> <kbd>P</kbd> | | Proposed structure | <kbd>Ctrl</kbd> <kbd>1</kbd> |
-| Open folder | <kbd>Ctrl</kbd> <kbd>O</kbd> | | Changes | <kbd>Ctrl</kbd> <kbd>2</kbd> |
-| Organize | <kbd>Ctrl</kbd> <kbd>Enter</kbd> | | Graph view | <kbd>Ctrl</kbd> <kbd>G</kbd> |
-| Apply plan | <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>Enter</kbd> | | Files | <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>E</kbd> |
-| Undo last change | <kbd>Ctrl</kbd> <kbd>Z</kbd> | | Search files | <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>F</kbd> |
+| Command palette | <kbd>Ctrl</kbd> <kbd>P</kbd> | | Organize screen | <kbd>Ctrl</kbd> <kbd>1</kbd> |
+| Open folder | <kbd>Ctrl</kbd> <kbd>O</kbd> | | Every move in the plan | <kbd>Ctrl</kbd> <kbd>2</kbd> |
+| Make a plan | <kbd>Ctrl</kbd> <kbd>Enter</kbd> | | Graph view | <kbd>Ctrl</kbd> <kbd>G</kbd> |
+| Apply plan | <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>Enter</kbd> | | Folders pane | <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>E</kbd> |
+| Undo last change | <kbd>Ctrl</kbd> <kbd>Z</kbd> | | Search all files | <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>F</kbd> |
 | Reload from disk | <kbd>Ctrl</kbd> <kbd>R</kbd> / <kbd>F5</kbd> | | Toggle sidebars | <kbd>Ctrl</kbd> <kbd>[</kbd> / <kbd>]</kbd> |
 | New folder | <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>N</kbd> | | Rename | <kbd>F2</kbd> |
 | Cut / copy / paste | <kbd>Ctrl</kbd> <kbd>X</kbd> / <kbd>C</kbd> / <kbd>V</kbd> | | Delete to Recycle Bin | <kbd>Del</kbd> |
@@ -314,7 +319,7 @@ All of these can be changed in **Settings → Hotkeys**.
 - **Nothing moves until you apply.** Planning is read-only.
 - **Never overwrites.** Clashes get ` (2)`, ` (3)`, and so on. When you choose *Replace* while pasting, the old file goes to the Recycle Bin.
 - **Deletes go to the Recycle Bin**, and <kbd>Ctrl</kbd> <kbd>Z</kbd> brings them back. Permanent delete always asks first.
-- **Every apply can be undone**, even after restarting Onyx.
+- **Every apply can be undone**, even after restarting Onyx, and undo never overwrites anything: files you've moved yourself since are skipped and listed.
 - **Refuses to reorganize dangerous places**: drive roots, Windows and Program Files, your whole user folder. You can still browse, search and tag them.
 - **Skips system files** like `desktop.ini`, `Thumbs.db` and `pagefile.sys`, and never opens `node_modules`, `.git` or virtual environments.
 - **AI can't escape the folder.** Paths are sanitized and checked before anything is planned.
