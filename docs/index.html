@@ -25,248 +25,369 @@
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,650;12..96,800&family=Hanken+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root {
-    --stone: #e4e6ec;        /* page: pale cool limestone */
-    --stone-deep: #d3d6df;   /* rules */
-    --ink: #17181f;          /* text */
-    --ink-soft: #4a4c58;     /* secondary text */
-    --onyx: #101116;         /* product windows */
-    --onyx-raised: #1a1b22;
-    --onyx-line: #2b2c36;
-    --on-onyx: #ecedf2;
-    --on-onyx-soft: #9a9cab;
-    --violet: #4651cf;       /* accent on stone */
-    --violet-light: #8f9cf9; /* accent inside onyx windows */
-    --safe: #2c7a5b;
+    --stone: #e4e6ec; --stone-deep: #d3d6df; --paper: #f4f5f8;
+    --ink: #17181f; --ink-soft: #4a4c58;
+    --onyx: #101116; --onyx-raised: #1a1b22; --onyx-line: #2b2c36; --on-onyx: #ecedf2; --on-onyx-soft: #9a9cab;
+    --violet: #4651cf; --violet-light: #8f9cf9; --mint: #6fd3a3;
     --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
     --body: "Hanken Grotesk", "Segoe UI", system-ui, sans-serif;
-    --r-window: 14px;
-    --r-control: 9px;
+    --ease: cubic-bezier(.16, 1, .3, 1);
+    --r-window: 14px; --r-control: 10px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html { scroll-behavior: smooth; }
-  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
-  body { background: var(--stone); color: var(--ink); font: 400 17px/1.6 var(--body); -webkit-font-smoothing: antialiased; }
+  body { background: var(--stone); color: var(--ink); font: 400 17px/1.6 var(--body); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+  /* a fine stone grain over everything */
+  body::after { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 100; opacity: .07; mix-blend-mode: multiply;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
   img { display: block; max-width: 100%; }
   a { color: inherit; }
   code { font-family: Consolas, "Cascadia Mono", monospace; font-size: .92em; }
+  h1, h2 { text-wrap: balance; }
+  p { text-wrap: pretty; }
   :focus-visible { outline: 2.5px solid var(--violet); outline-offset: 3px; border-radius: 4px; }
-  .wrap { max-width: 1160px; margin: 0 auto; padding: 0 28px; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 28px; }
 
-  /* nav */
-  .nav { display: flex; align-items: center; gap: 28px; padding: 22px 0; }
+  /* ---------------------------------------------------------------- header */
+  .top { position: sticky; top: 0; z-index: 50; transition: background-color .3s, box-shadow .3s, backdrop-filter .3s; }
+  .top.scrolled { background: rgba(228,230,236,.72); backdrop-filter: blur(14px) saturate(1.4); -webkit-backdrop-filter: blur(14px) saturate(1.4); box-shadow: 0 1px 0 rgba(23,24,31,.08); }
+  .nav { display: flex; align-items: center; gap: 28px; height: 72px; }
   .logo { display: flex; align-items: center; gap: 10px; font: 800 21px/1 var(--display); letter-spacing: -.02em; text-decoration: none; }
-  .logo img { width: 30px; height: 30px; }
-  .nav-links { display: flex; gap: 26px; margin-left: auto; font-size: 15px; }
-  .nav-links a { text-decoration: none; color: var(--ink-soft); }
-  .nav-links a:hover { color: var(--ink); }
+  .logo img { width: 30px; height: 30px; transition: transform .6s var(--ease); }
+  .logo:hover img { transform: rotate(-14deg) scale(1.08); }
+  .nav-links { display: flex; align-items: center; gap: 26px; margin-left: auto; font-size: 15px; }
+  .nav-links a { text-decoration: none; color: var(--ink-soft); position: relative; }
+  .nav-links a:not(.nav-cta)::after { content: ""; position: absolute; left: 0; right: 0; bottom: -4px; height: 1.5px; background: currentColor; transform: scaleX(0); transform-origin: right; transition: transform .35s var(--ease); }
+  .nav-links a:not(.nav-cta):hover { color: var(--ink); }
+  .nav-links a:not(.nav-cta):hover::after { transform: scaleX(1); transform-origin: left; }
+  .nav-cta { height: 38px; padding: 0 16px; display: inline-flex; align-items: center; border-radius: 9px; background: var(--ink); color: var(--stone) !important; font-weight: 600; opacity: 0; transform: translateY(-6px); pointer-events: none; transition: opacity .3s, transform .3s var(--ease); }
+  .top.scrolled .nav-cta { opacity: 1; transform: none; pointer-events: auto; }
 
-  /* buttons */
-  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 9px; height: 50px; padding: 0 22px; border-radius: var(--r-control); font: 600 16px/1 var(--body); text-decoration: none; border: 1.5px solid var(--ink); background: transparent; color: var(--ink); cursor: pointer; }
+  /* ---------------------------------------------------------------- buttons */
+  .btn { position: relative; overflow: hidden; display: inline-flex; align-items: center; justify-content: center; gap: 9px; height: 52px; padding: 0 24px; border-radius: var(--r-control); font: 600 16px/1 var(--body); text-decoration: none; border: 1.5px solid var(--ink); background: transparent; color: var(--ink); cursor: pointer; transition: transform .35s var(--ease), box-shadow .35s var(--ease), background-color .2s; }
   .btn svg { width: 18px; height: 18px; flex-shrink: 0; }
-  .btn-primary { background: var(--ink); color: var(--stone); }
-  .btn-primary:hover { background: #2a2c36; border-color: #2a2c36; }
-  .btn:not(.btn-primary):hover { background: rgba(23,24,31,.06); }
+  .btn:hover { transform: translateY(-2px); }
+  .btn-primary { background: var(--ink); color: var(--stone); box-shadow: 0 10px 24px -12px rgba(23,24,31,.6); }
+  .btn-primary:hover { box-shadow: 0 18px 34px -14px rgba(23,24,31,.65); }
+  .btn-primary::after { content: ""; position: absolute; top: 0; bottom: 0; left: -60%; width: 40%; background: linear-gradient(100deg, transparent, rgba(255,255,255,.28), transparent); transform: skewX(-20deg); }
+  .btn-primary:hover::after { animation: sheen .9s var(--ease); }
+  @keyframes sheen { to { left: 130%; } }
+  .btn:not(.btn-primary):hover { background: rgba(23,24,31,.05); }
+  .btn .arrow-down { transition: transform .35s var(--ease); }
+  .btn:hover .arrow-down { transform: translateY(2px); }
 
-  /* hero */
-  .hero { display: grid; grid-template-columns: minmax(0, 11fr) minmax(0, 13fr); gap: 48px; align-items: center; padding: 48px 0 96px; }
-  .hero h1 { font: 800 clamp(44px, 6.2vw, 76px)/0.98 var(--display); letter-spacing: -.035em; }
-  .hero h1 span { display: block; margin-top: .12em; color: var(--ink-soft); font-weight: 650; font-size: .62em; line-height: 1.05; letter-spacing: -.025em; }
+  /* ---------------------------------------------------------------- hero */
+  .hero-wrap { position: relative; isolation: isolate; }
+  .aura { position: absolute; inset: -140px 0 0; z-index: -1; overflow: hidden; pointer-events: none; }
+  .aura i { position: absolute; border-radius: 50%; filter: blur(70px); opacity: .55; }
+  .aura i:nth-child(1) { width: 620px; height: 620px; right: -6%; top: 0; background: radial-gradient(circle, rgba(143,156,249,.9), rgba(143,156,249,0) 68%); animation: drift1 22s ease-in-out infinite alternate; }
+  .aura i:nth-child(2) { width: 520px; height: 520px; right: 26%; top: 260px; background: radial-gradient(circle, rgba(181,170,240,.7), rgba(181,170,240,0) 68%); animation: drift2 26s ease-in-out infinite alternate; }
+  .aura i:nth-child(3) { width: 460px; height: 460px; left: -8%; top: -60px; background: radial-gradient(circle, rgba(255,255,255,.95), rgba(255,255,255,0) 70%); animation: drift1 30s ease-in-out infinite alternate-reverse; }
+  @keyframes drift1 { to { transform: translate(-90px, 70px) scale(1.12); } }
+  @keyframes drift2 { to { transform: translate(110px, -60px) scale(.9); } }
+
+  .hero { display: grid; grid-template-columns: minmax(0, 11fr) minmax(0, 13fr); gap: 52px; align-items: center; padding: 56px 0 104px; }
+  .hero h1 { font: 800 clamp(46px, 6.4vw, 80px)/0.97 var(--display); letter-spacing: -.038em; }
+  .hero h1 .line { display: block; overflow: hidden; padding-bottom: .06em; }
+  .hero h1 .line > span { display: block; }
+  .hero h1 .soft { color: var(--ink-soft); font-weight: 650; font-size: .6em; line-height: 1.06; letter-spacing: -.025em; margin-top: .14em; }
   .hero-lede { margin-top: 26px; max-width: 30em; font-size: 19px; color: var(--ink-soft); }
   .hero-ctas { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 34px; }
   .hero-fine { margin-top: 14px; font-size: 14px; color: var(--ink-soft); }
 
-  /* the live demo window */
-  .window { background: var(--onyx); color: var(--on-onyx); border-radius: var(--r-window); box-shadow: 0 40px 80px -30px rgba(16,17,22,.55), 0 0 0 1px rgba(16,17,22,.9); overflow: hidden; }
+  /* page-load sequence */
+  .js [data-in] { opacity: 0; transform: translateY(18px); transition: opacity .9s var(--ease), transform 1.1s var(--ease); transition-delay: var(--d, 0s); }
+  .js .hero h1 .line > span { transform: translateY(105%); transition: transform 1.15s var(--ease); transition-delay: var(--d, 0s); }
+  .js .stage-3d { opacity: 0; transform: perspective(1600px) rotateX(16deg) rotateY(-10deg) translateY(60px) scale(.94); transition: opacity 1.1s var(--ease) .35s, transform 1.6s var(--ease) .35s; }
+  .ready [data-in] { opacity: 1; transform: none; }
+  .ready .hero h1 .line > span { transform: none; }
+  .ready .stage-3d { opacity: 1; transform: perspective(1600px) rotateX(2deg) rotateY(-4deg); }
+  .ready .stage-3d:hover { transform: perspective(1600px) rotateX(0) rotateY(0); }
+  .stage-3d { transform-style: preserve-3d; transition: transform 1s var(--ease); }
+
+  /* ---------------------------------------------------------------- the demo window */
+  .window { position: relative; background: var(--onyx); color: var(--on-onyx); border-radius: var(--r-window); box-shadow: 0 50px 100px -40px rgba(16,17,22,.7), 0 0 0 1px rgba(16,17,22,.9); overflow: hidden; }
+  .window::before { content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 3; border-radius: inherit; opacity: 0; transition: opacity .4s;
+    background: radial-gradient(420px circle at var(--mx, 50%) var(--my, 50%), rgba(143,156,249,.14), transparent 60%); }
+  .window:hover::before { opacity: 1; }
+  .window::after { content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 3; border-radius: inherit; padding: 1px; opacity: 0; transition: opacity .4s;
+    background: radial-gradient(260px circle at var(--mx, 50%) var(--my, 50%), rgba(143,156,249,.75), transparent 70%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
+  .window:hover::after { opacity: 1; }
   .win-bar { display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 16px; border-bottom: 1px solid var(--onyx-line); font-size: 14px; }
   .win-bar img { width: 18px; height: 18px; }
   .win-title { font-weight: 600; }
   .win-count { margin-left: auto; color: var(--on-onyx-soft); font-variant-numeric: tabular-nums; }
-  .stage { position: relative; height: 396px; padding: 18px; overflow: hidden; }
-  .stage[data-state="messy"] .file { transform: rotate(var(--tilt, 0deg)); }
+  .stage { position: relative; height: 428px; padding: 18px; overflow: hidden; }
   .pile { display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start; }
   .groups { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 12px; align-content: start; }
   .group-name { display: flex; align-items: center; gap: 7px; margin-bottom: 6px; font-size: 13px; font-weight: 600; color: var(--on-onyx); }
   .group-name svg { width: 15px; height: 15px; color: var(--violet-light); flex-shrink: 0; }
   .group-name em { font-style: normal; font-weight: 500; color: var(--on-onyx-soft); margin-left: auto; font-size: 12px; }
   .group-files { display: flex; flex-direction: column; gap: 5px; padding-left: 8px; border-left: 1px solid var(--onyx-line); }
-  .file { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 11px 0 9px; border-radius: 7px; background: var(--onyx-raised); border: 1px solid var(--onyx-line); font: 500 13px/1 var(--body); color: var(--on-onyx); white-space: nowrap; max-width: 100%; text-align: left; cursor: default; }
+  .group-new { animation: groupIn .7s var(--ease) both; }
+  @keyframes groupIn { from { opacity: 0; } }
+  .file { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 11px 0 9px; border-radius: 7px; background: var(--onyx-raised); border: 1px solid var(--onyx-line); font: 500 13px/1 var(--body); color: var(--on-onyx); white-space: nowrap; max-width: 100%; text-align: left; cursor: default; transition: opacity .3s, border-color .2s, background-color .2s; }
   .file svg { width: 15px; height: 15px; flex-shrink: 0; color: var(--on-onyx-soft); }
   .file .fname { overflow: hidden; text-overflow: ellipsis; }
   .file .to { display: none; color: var(--violet-light); font-weight: 500; }
   .groups .file { width: 100%; }
+  .stage[data-state="messy"] .file { transform: rotate(var(--tilt, 0deg)); }
   .stage[data-state="plan"] .file { cursor: pointer; }
-  .stage[data-state="plan"] .file .to { display: inline; }
-  .stage[data-state="plan"] .file:hover { border-color: #444656; }
-  .file.kept { opacity: .45; }
+  .stage[data-state="plan"] .file .to { display: inline; animation: toIn .55s var(--ease) both; animation-delay: var(--td, 0s); }
+  @keyframes toIn { from { opacity: 0; transform: translateX(-6px); } }
+  .stage[data-state="plan"] .file:hover { border-color: #444656; background: #20212a; }
+  .file.kept { opacity: .42; }
   .file.kept .to { text-decoration: line-through; color: var(--on-onyx-soft); }
   .stage-hint { position: absolute; left: 18px; right: 18px; bottom: 14px; font-size: 13px; color: var(--on-onyx-soft); visibility: hidden; }
   .stage[data-state="plan"] .stage-hint { visibility: visible; }
-  .win-actions { display: flex; align-items: center; gap: 10px; min-height: 64px; padding: 12px 16px; border-top: 1px solid var(--onyx-line); background: #0c0d11; }
+  .win-actions { position: relative; display: flex; align-items: center; gap: 10px; min-height: 64px; padding: 12px 16px; border-top: 1px solid var(--onyx-line); background: #0c0d11; }
   .win-msg { font-size: 14px; color: var(--on-onyx-soft); margin-right: auto; }
   .win-msg b { color: var(--on-onyx); font-weight: 600; }
-  .win-msg .ok { color: #6fd3a3; }
-  .wbtn { height: 38px; padding: 0 16px; border-radius: 8px; border: 1px solid var(--onyx-line); background: var(--onyx-raised); color: var(--on-onyx); font: 600 14px/1 var(--body); cursor: pointer; white-space: nowrap; }
+  .win-msg .ok { color: var(--mint); }
+  .wbtn { position: relative; height: 38px; padding: 0 16px; border-radius: 8px; border: 1px solid var(--onyx-line); background: var(--onyx-raised); color: var(--on-onyx); font: 600 14px/1 var(--body); cursor: pointer; white-space: nowrap; transition: transform .25s var(--ease), background-color .2s, border-color .2s; }
   .wbtn:hover { border-color: #444656; }
+  .wbtn:active, .wbtn.pressed { transform: scale(.95); }
   .wbtn.go { background: var(--violet-light); border-color: var(--violet-light); color: #0d0e13; }
   .wbtn.go:hover { background: #a8b2fb; }
   .wbtn:disabled { opacity: .5; cursor: default; }
   .window :focus-visible { outline-color: var(--violet-light); }
+  /* the demo's own cursor while it plays itself */
+  .ghost { position: absolute; z-index: 4; left: 0; top: 0; width: 22px; height: 22px; pointer-events: none; opacity: 0; transition: transform .9s var(--ease), opacity .3s; filter: drop-shadow(0 2px 3px rgba(0,0,0,.6)); }
+  .ghost.on { opacity: 1; }
+  .ghost.click::after { content: ""; position: absolute; left: -9px; top: -9px; width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--violet-light); animation: ping .5s ease-out forwards; }
+  @keyframes ping { from { transform: scale(.3); opacity: 1; } to { transform: scale(1.6); opacity: 0; } }
+  .win-count { transition: opacity .3s; }
+  .autoplaying .win-count { opacity: 0; }
+  .autoplay-note { position: absolute; top: 9px; right: 14px; z-index: 2; font-size: 12px; color: var(--on-onyx-soft); background: rgba(16,17,22,.8); border: 1px solid var(--onyx-line); border-radius: 999px; padding: 4px 10px; transition: opacity .4s; }
+  .autoplay-note.gone { opacity: 0; }
 
-  /* sections */
-  section { padding: 96px 0; }
-  .sec-head { max-width: 40em; margin-bottom: 44px; }
-  h1, h2 { text-wrap: balance; }
-  p { text-wrap: pretty; }
-  h2 { font: 800 clamp(32px, 4.2vw, 50px)/1.04 var(--display); letter-spacing: -.03em; }
-  .lede { margin-top: 16px; font-size: 19px; color: var(--ink-soft); max-width: 36em; }
-  .rule { border: 0; border-top: 1px solid var(--stone-deep); }
+  /* ---------------------------------------------------------------- the ribbon of messy file names */
+  .ribbon { position: relative; padding: 26px 0; overflow: hidden; border-top: 1px solid var(--stone-deep); border-bottom: 1px solid var(--stone-deep); background: var(--paper);
+    -webkit-mask: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent); mask: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent); }
+  .ribbon-row { display: flex; gap: 10px; width: max-content; animation: slide 60s linear infinite; }
+  .ribbon-row + .ribbon-row { margin-top: 10px; animation-direction: reverse; animation-duration: 72s; }
+  .ribbon:hover .ribbon-row { animation-play-state: paused; }
+  @keyframes slide { to { transform: translateX(-50%); } }
+  .chip { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px; border-radius: 999px; background: #fff; border: 1px solid var(--stone-deep); font-size: 14px; color: var(--ink-soft); white-space: nowrap; }
+  .chip i { width: 8px; height: 8px; border-radius: 50%; background: var(--c, #9aa); }
 
-  /* how it works: a real sequence, so the steps are numbered */
-  .steps { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: 48px; align-items: start; }
-  .step-list { list-style: none; display: flex; flex-direction: column; gap: 4px; }
-  .step-btn { display: grid; grid-template-columns: 36px 1fr; gap: 4px 14px; width: 100%; padding: 18px 18px 18px 14px; border: 0; border-radius: 12px; background: transparent; color: var(--ink); text-align: left; cursor: pointer; font: inherit; }
-  .step-btn:hover { background: rgba(23,24,31,.04); }
-  .step-btn .n { grid-row: span 2; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; font: 650 15px/1 var(--display); border: 1.5px solid var(--stone-deep); color: var(--ink-soft); }
-  .step-btn .t { font: 650 20px/1.25 var(--display); letter-spacing: -.01em; }
-  .step-btn .d { font-size: 15px; color: var(--ink-soft); }
-  .step-btn[aria-selected="true"] { background: #fff; box-shadow: 0 1px 2px rgba(16,17,22,.06), 0 0 0 1px var(--stone-deep); }
-  .step-btn[aria-selected="true"] .n { background: var(--ink); border-color: var(--ink); color: var(--stone); }
-  .shot { border-radius: var(--r-window); overflow: hidden; background: var(--onyx); box-shadow: 0 30px 60px -28px rgba(16,17,22,.5), 0 0 0 1px rgba(16,17,22,.85); aspect-ratio: 16 / 10; }
+  /* ---------------------------------------------------------------- sections */
+  section { padding: 120px 0; position: relative; }
+  .sec-head { max-width: 42em; margin-bottom: 52px; }
+  h2 { font: 800 clamp(34px, 4.6vw, 56px)/1.02 var(--display); letter-spacing: -.035em; }
+  .lede { margin-top: 18px; font-size: 19px; color: var(--ink-soft); max-width: 36em; }
+  .js [data-reveal] { opacity: 0; transform: translateY(32px); transition: opacity .9s var(--ease), transform 1.1s var(--ease); transition-delay: calc(var(--i, 0) * 90ms); }
+  .js [data-reveal].seen { opacity: 1; transform: none; }
+
+  /* how it works: pinned screenshot, steps light up as you scroll */
+  .steps { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: 56px; align-items: start; }
+  .step-list { list-style: none; position: relative; padding-left: 26px; }
+  .step-list::before, .step-list::after { content: ""; position: absolute; left: 7px; top: 24px; bottom: 24px; width: 2px; border-radius: 2px; background: var(--stone-deep); }
+  .step-list::after { background: var(--ink); transform-origin: top; transform: scaleY(var(--p, 0)); transition: transform .6s var(--ease); }
+  .step { min-height: 46vh; display: flex; align-items: center; }
+  .step:first-child { min-height: 30vh; align-items: flex-start; }
+  .step-btn { position: relative; display: block; width: 100%; padding: 20px 22px; border: 0; border-radius: 14px; background: transparent; color: var(--ink); text-align: left; cursor: pointer; font: inherit; transition: background-color .4s, box-shadow .4s, opacity .4s; opacity: .45; }
+  .step-btn::before { content: ""; position: absolute; left: -24px; top: 30px; width: 12px; height: 12px; border-radius: 50%; background: var(--stone); border: 2px solid var(--stone-deep); transition: background-color .4s, border-color .4s, transform .4s var(--ease); }
+  .step-btn .n { font: 650 14px/1 var(--display); color: var(--ink-soft); }
+  .step-btn .t { display: block; margin-top: 6px; font: 650 24px/1.2 var(--display); letter-spacing: -.015em; }
+  .step-btn .d { display: block; margin-top: 8px; font-size: 16px; color: var(--ink-soft); }
+  .step-btn:hover { opacity: .8; }
+  .step-btn[aria-selected="true"] { opacity: 1; background: #fff; box-shadow: 0 1px 2px rgba(16,17,22,.06), 0 0 0 1px var(--stone-deep), 0 20px 40px -24px rgba(16,17,22,.25); }
+  .step-btn[aria-selected="true"]::before { background: var(--ink); border-color: var(--ink); transform: scale(1.25); }
+  .step-shot { position: sticky; top: 110px; }
+  .shot { position: relative; border-radius: var(--r-window); overflow: hidden; background: var(--onyx); box-shadow: 0 40px 80px -36px rgba(16,17,22,.55), 0 0 0 1px rgba(16,17,22,.85); aspect-ratio: 16 / 10; }
   .shot img { width: 100%; height: 100%; object-fit: cover; object-position: left top; }
-  .step-shot { position: sticky; top: 24px; }
+  .shot .layer { position: absolute; inset: 0; opacity: 0; transform: scale(1.03); transition: opacity .7s var(--ease), transform 1.2s var(--ease); }
+  .shot .layer.on { opacity: 1; transform: none; }
+  .tilt { transform: perspective(1400px) rotateX(calc(var(--t, 0) * 14deg)) scale(calc(1 - var(--t, 0) * .06)); transform-origin: center top; will-change: transform; }
 
-  /* safety: dark band, plain guarantees */
-  .safe { background: var(--onyx); color: var(--on-onyx); }
+  /* safety: dark band */
+  .safe { background: var(--onyx); color: var(--on-onyx); overflow: hidden; }
   .safe .lede { color: var(--on-onyx-soft); }
-  .promises { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 56px; }
-  .promise { display: grid; grid-template-columns: 26px 1fr; gap: 14px; padding: 22px 0; border-top: 1px solid var(--onyx-line); }
-  .promise svg { width: 22px; height: 22px; color: #6fd3a3; margin-top: 3px; }
-  .promise h3 { font: 650 19px/1.3 var(--display); }
-  .promise p { margin-top: 4px; color: var(--on-onyx-soft); font-size: 16px; }
+  .safe::before { content: ""; position: absolute; width: 900px; height: 900px; right: -300px; top: -380px; border-radius: 50%; background: radial-gradient(circle, rgba(143,156,249,.16), transparent 65%); pointer-events: none; }
+  .promises { position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 64px; }
+  .promise { display: grid; grid-template-columns: 30px 1fr; gap: 16px; padding: 26px 0; border-top: 1px solid var(--onyx-line); }
+  .promise svg { width: 24px; height: 24px; color: var(--mint); margin-top: 3px; }
+  .promise svg * { stroke-dasharray: 80; stroke-dashoffset: 0; }
+  .js .promise svg * { stroke-dashoffset: 80; transition: stroke-dashoffset 1.4s var(--ease); transition-delay: calc(var(--i, 0) * 90ms + .25s); }
+  .js .promise.seen svg * { stroke-dashoffset: 0; }
+  .promise h3 { font: 650 20px/1.3 var(--display); }
+  .promise p { margin-top: 5px; color: var(--on-onyx-soft); font-size: 16px; }
 
   /* split sections */
-  .split { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 56px; align-items: center; }
+  .split { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 64px; align-items: center; }
   .split.flip { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); }
   .split.flip .split-text { order: 2; }
-  .feature-list { list-style: none; margin-top: 30px; display: flex; flex-direction: column; gap: 18px; }
-  .feature-list li { padding-left: 18px; border-left: 2px solid var(--stone-deep); }
+  .feature-list { list-style: none; margin-top: 32px; display: flex; flex-direction: column; gap: 6px; }
+  .feature-list li { padding: 14px 16px 14px 18px; border-radius: 12px; border-left: 2px solid var(--stone-deep); transition: background-color .3s, border-color .3s; }
+  .feature-list li:hover { background: rgba(255,255,255,.55); border-left-color: var(--violet); }
   .feature-list b { display: block; font: 650 18px/1.3 var(--display); }
   .feature-list span { color: var(--ink-soft); font-size: 16px; }
   kbd { font: 600 13px/1 var(--body); padding: 3px 6px; border-radius: 5px; background: #fff; border: 1px solid var(--stone-deep); box-shadow: 0 1px 0 var(--stone-deep); }
 
-  /* AI choice: a real comparison, so a table */
   .ai-table { width: 100%; border-collapse: collapse; margin-top: 30px; font-size: 16px; }
-  .ai-table th, .ai-table td { text-align: left; padding: 14px 16px 14px 0; border-top: 1px solid var(--stone-deep); vertical-align: top; }
+  .ai-table th, .ai-table td { text-align: left; padding: 16px 16px 16px 0; border-top: 1px solid var(--stone-deep); vertical-align: top; }
   .ai-table thead th { border-top: 0; font: 600 14px/1.3 var(--body); color: var(--ink-soft); padding-bottom: 10px; }
   .ai-table tbody th { font: 650 17px/1.3 var(--display); white-space: nowrap; }
   .ai-table td { color: var(--ink-soft); }
-  .tick { color: var(--safe); font-weight: 600; }
+  .tick { color: #2c7a5b; font-weight: 600; }
 
-  /* faq */
-  .faq { max-width: 780px; }
+  /* faq: smooth open */
+  .faq { max-width: 800px; }
   .faq details { border-top: 1px solid var(--stone-deep); }
   .faq details:last-child { border-bottom: 1px solid var(--stone-deep); }
-  .faq summary { list-style: none; display: flex; align-items: center; gap: 16px; padding: 22px 0; cursor: pointer; font: 650 20px/1.3 var(--display); letter-spacing: -.01em; }
+  .faq summary { list-style: none; display: flex; align-items: center; gap: 16px; padding: 24px 0; cursor: pointer; font: 650 21px/1.3 var(--display); letter-spacing: -.01em; transition: color .2s; }
+  .faq summary:hover { color: var(--violet); }
   .faq summary::-webkit-details-marker { display: none; }
-  .faq summary::after { content: ""; margin-left: auto; width: 10px; height: 10px; flex-shrink: 0; border-right: 2px solid var(--ink-soft); border-bottom: 2px solid var(--ink-soft); transform: translateY(-3px) rotate(45deg); transition: transform .2s; }
-  .faq details[open] summary::after { transform: translateY(2px) rotate(-135deg); }
-  .faq details p { padding: 0 0 22px; max-width: 40em; color: var(--ink-soft); }
+  .faq summary .pm { position: relative; margin-left: auto; width: 16px; height: 16px; flex-shrink: 0; }
+  .faq summary .pm::before, .faq summary .pm::after { content: ""; position: absolute; left: 0; right: 0; top: 7px; height: 2px; border-radius: 2px; background: currentColor; transition: transform .45s var(--ease); }
+  .faq summary .pm::after { transform: rotate(90deg); }
+  .faq details[open] summary .pm::after { transform: rotate(0); }
+  .faq .ans { overflow: hidden; }
+  .faq .ans p { padding: 0 0 24px; max-width: 40em; color: var(--ink-soft); }
 
   /* closing */
-  .closing-box { display: grid; grid-template-columns: auto 1fr auto; gap: 32px; align-items: center; padding: 44px; border-radius: 22px; background: #fff; box-shadow: 0 0 0 1px var(--stone-deep); }
-  .closing-box img { width: 88px; height: 88px; }
-  .closing-box h2 { font-size: clamp(28px, 3.4vw, 40px); }
-  .closing-box p { margin-top: 8px; color: var(--ink-soft); }
-  .closing-ctas { display: flex; flex-direction: column; gap: 10px; }
-  footer { padding: 40px 0 56px; font-size: 14px; color: var(--ink-soft); display: flex; flex-wrap: wrap; gap: 8px 26px; }
+  .closing { padding-top: 40px; }
+  .closing-box { position: relative; overflow: hidden; display: grid; grid-template-columns: auto 1fr auto; gap: 40px; align-items: center; padding: 56px; border-radius: 24px; background: var(--onyx); color: var(--on-onyx); }
+  .closing-box::before { content: ""; position: absolute; width: 520px; height: 520px; left: -160px; top: -240px; border-radius: 50%; background: radial-gradient(circle, rgba(143,156,249,.28), transparent 65%); animation: drift2 18s ease-in-out infinite alternate; }
+  .stone { position: relative; width: 112px; height: 112px; animation: float 6s ease-in-out infinite; filter: drop-shadow(0 18px 22px rgba(0,0,0,.55)); }
+  @keyframes float { 50% { transform: translateY(-10px) rotate(-5deg); } }
+  .closing-box h2 { position: relative; font-size: clamp(30px, 3.6vw, 44px); }
+  .closing-box p { position: relative; margin-top: 10px; color: var(--on-onyx-soft); }
+  .closing-ctas { position: relative; display: flex; flex-direction: column; gap: 10px; }
+  .closing .btn { border-color: var(--on-onyx); color: var(--on-onyx); }
+  .closing .btn-primary { background: var(--violet-light); border-color: var(--violet-light); color: #0d0e13; box-shadow: 0 14px 30px -14px rgba(143,156,249,.6); }
+  .closing .btn:not(.btn-primary):hover { background: rgba(255,255,255,.06); }
+  footer { padding: 44px 0 60px; font-size: 14px; color: var(--ink-soft); display: flex; flex-wrap: wrap; gap: 8px 26px; }
   footer a { color: var(--ink-soft); }
   footer span { margin-right: auto; }
 
+  /* ---------------------------------------------------------------- small screens */
   @media (max-width: 960px) {
-    .hero, .steps, .split, .split.flip { grid-template-columns: minmax(0, 1fr); gap: 40px; }
+    .hero, .steps, .split, .split.flip { grid-template-columns: minmax(0, 1fr); gap: 44px; }
     .split.flip .split-text { order: 0; }
-    .step-shot { position: static; order: -1; }
+    .step-shot { top: 80px; order: -1; z-index: 2; }
+    .step { min-height: 0; padding: 6px 0; }
+    .step:first-child { min-height: 0; }
     .promises { grid-template-columns: minmax(0, 1fr); }
-    .closing-box { grid-template-columns: minmax(0, 1fr); padding: 32px; }
+    .closing-box { grid-template-columns: minmax(0, 1fr); padding: 36px; gap: 24px; }
     .closing-ctas { flex-direction: row; flex-wrap: wrap; }
+    .ready .stage-3d { transform: none; }
   }
   @media (max-width: 640px) {
     .wrap { padding: 0 18px; }
-    .nav-links a:not(.gh) { display: none; }
-    .hero { padding: 24px 0 64px; }
-    section { padding: 64px 0; }
+    .nav-links a:not(.gh):not(.nav-cta) { display: none; }
+    .nav-links .gh { display: none; }
+    .hero { padding: 28px 0 72px; }
+    section { padding: 80px 0; }
     .stage { height: 560px; padding: 14px; }
-    .win-actions { justify-content: flex-end; }
     .groups { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .win-actions { flex-wrap: wrap; }
+    .win-actions { flex-wrap: wrap; justify-content: flex-end; }
     .win-msg { flex-basis: 100%; }
     .ai-table thead { display: none; }
     .ai-table tr { display: block; border-top: 1px solid var(--stone-deep); padding: 12px 0; }
     .ai-table th, .ai-table td { display: block; border: 0; padding: 3px 0; }
     .hero-ctas .btn, .closing-ctas .btn { width: 100%; }
   }
+
+  /* ---------------------------------------------------------------- calm mode */
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after { animation: none !important; transition-duration: .01s !important; transition-delay: 0s !important; }
+    .js [data-in], .js [data-reveal], .js .stage-3d, .js .hero h1 .line > span { opacity: 1 !important; transform: none !important; }
+    .js .promise svg * { stroke-dashoffset: 0 !important; }
+    .tilt { transform: none !important; }
+    .ribbon-row { transform: none !important; }
+  }
 </style>
+<script>document.documentElement.classList.add('js');</script>
 </head>
 <body>
-<div class="wrap">
-  <nav class="nav" aria-label="Main">
-    <a class="logo" href="./"><img src="icon.png" alt="">Onyx</a>
-    <div class="nav-links">
-      <a href="#how">How it works</a>
-      <a href="#explorer">Explorer</a>
-      <a href="#faq">Questions</a>
-      <a class="gh" href="https://github.com/Barbaqueda/onyx">GitHub</a>
-    </div>
-  </nav>
 
-  <header class="hero">
-    <div>
-      <h1>Tidy any folder.<span>Nothing moves until you say so.</span></h1>
-      <p class="hero-lede">Onyx looks at a messy folder, plans where everything should go, and shows you every move first. Keep what you like, apply it, and undo the whole thing with one click.</p>
-      <div class="hero-ctas">
-        <a class="btn btn-primary" href="https://github.com/Barbaqueda/onyx/releases/latest">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
-          Download for Windows</a>
-        <a class="btn" href="https://github.com/Barbaqueda/onyx">
-          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.69 5.39-5.25 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></svg>
-          View on GitHub</a>
+<div class="top" id="top">
+  <div class="wrap">
+    <nav class="nav" aria-label="Main">
+      <a class="logo" href="./"><img src="icon.png" alt="">Onyx</a>
+      <div class="nav-links">
+        <a href="#how">How it works</a>
+        <a href="#explorer">Explorer</a>
+        <a href="#faq">Questions</a>
+        <a class="gh" href="https://github.com/Barbaqueda/onyx">GitHub</a>
+        <a class="nav-cta" href="https://github.com/Barbaqueda/onyx/releases/latest" tabindex="-1">Download</a>
       </div>
-      <p class="hero-fine" id="version">Free for personal use, for Windows 10 and 11. No installer needed.</p>
-    </div>
-
-    <div class="window" role="region" aria-label="Try it on a pretend Downloads folder">
-      <div class="win-bar"><img src="icon.png" alt=""><span class="win-title">Downloads</span><span class="win-count" id="count">17 files</span></div>
-      <div class="stage" id="stage" data-state="messy">
-        <div class="pile" id="pile"></div>
-        <div class="groups" id="groups" hidden></div>
-        <p class="stage-hint">Click a file to keep it where it is.</p>
-      </div>
-      <div class="win-actions">
-        <span class="win-msg" id="msg" aria-live="polite">A messy Downloads folder. Try organizing it.</span>
-        <button class="wbtn" id="discard" hidden>Discard</button>
-        <button class="wbtn go" id="go">Make a plan</button>
-      </div>
-    </div>
-  </header>
+    </nav>
+  </div>
 </div>
 
-<hr class="rule">
+<div class="hero-wrap">
+  <div class="aura" aria-hidden="true"><i></i><i></i><i></i></div>
+  <div class="wrap">
+    <header class="hero">
+      <div>
+        <h1>
+          <span class="line"><span style="--d:.05s">Tidy any</span></span>
+          <span class="line"><span style="--d:.15s">folder.</span></span>
+          <span class="line soft"><span style="--d:.3s">Nothing moves until you say so.</span></span>
+        </h1>
+        <p class="hero-lede" data-in style="--d:.5s">Onyx looks at a messy folder, plans where everything should go, and shows you every move first. Keep what you like, apply it, and undo the whole thing with one click.</p>
+        <div class="hero-ctas" data-in style="--d:.62s">
+          <a class="btn btn-primary" href="https://github.com/Barbaqueda/onyx/releases/latest">
+            <svg class="arrow-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+            Download for Windows</a>
+          <a class="btn" href="https://github.com/Barbaqueda/onyx">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.15.08 1.76 1.19 1.76 1.19 1.03 1.76 2.7 1.25 3.36.96.1-.75.4-1.25.73-1.54-2.55-.29-5.24-1.28-5.24-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.41-2.69 5.39-5.25 5.67.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5Z"/></svg>
+            Star on GitHub</a>
+        </div>
+        <p class="hero-fine" id="version" data-in style="--d:.72s">Free for personal use, for Windows 10 and 11. No installer needed.</p>
+      </div>
+
+      <div class="stage-3d" id="stage3d">
+        <div class="window" id="window" role="region" aria-label="Try it on a pretend Downloads folder">
+          <div class="win-bar"><img src="icon.png" alt=""><span class="win-title">Downloads</span><span class="win-count" id="count">17 files</span></div>
+          <div class="stage" id="stage" data-state="messy">
+            <div class="pile" id="pile"></div>
+            <div class="groups" id="groups" hidden></div>
+            <p class="stage-hint">Click a file to keep it where it is.</p>
+          </div>
+          <div class="win-actions">
+            <span class="win-msg" id="msg" aria-live="polite">A messy Downloads folder.</span>
+            <button class="wbtn" id="discard" hidden>Discard</button>
+            <button class="wbtn go" id="go">Make a plan</button>
+          </div>
+          <span class="autoplay-note" id="note" aria-hidden="true">Playing a demo. Click to try it.</span>
+          <svg class="ghost" id="ghost" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 2l7.5 19 2.6-7.6L21.5 11Z" fill="#fff" stroke="#111" stroke-width="1.4" stroke-linejoin="round"/></svg>
+        </div>
+      </div>
+    </header>
+  </div>
+</div>
+
+<div class="ribbon" aria-hidden="true">
+  <div class="ribbon-row" id="row1"></div>
+  <div class="ribbon-row" id="row2"></div>
+</div>
 
 <section id="how">
   <div class="wrap">
-    <div class="sec-head">
+    <div class="sec-head" data-reveal>
       <h2>Four steps, and you decide at every one</h2>
       <p class="lede">The app works just like the demo above, on your real folders.</p>
     </div>
     <div class="steps">
       <ol class="step-list" role="tablist" aria-label="How Onyx works" aria-orientation="vertical" id="stepList">
-        <li><button class="step-btn" role="tab" aria-selected="true" aria-controls="stepShot" data-img="overview.png" data-alt="Choosing how to sort a folder"><span class="n">1</span><span class="t">Choose how to sort</span><span class="d">AI that reads names and your existing folders, offline rules, or simply by type, date or size.</span></button></li>
-        <li><button class="step-btn" role="tab" aria-selected="false" aria-controls="stepShot" tabindex="-1" data-img="hero.png" data-alt="Reviewing the plan as a folder tree"><span class="n">2</span><span class="t">Review the plan</span><span class="d">See the new folders or every single move, with the reason for each. Untick anything you disagree with.</span></button></li>
-        <li><button class="step-btn" role="tab" aria-selected="false" aria-controls="stepShot" tabindex="-1" data-img="step-apply.png" data-alt="The folder after applying, with an Undo button"><span class="n">3</span><span class="t">Apply</span><span class="d">Only the moves you kept happen. If a name is taken, nothing is overwritten.</span></button></li>
-        <li><button class="step-btn" role="tab" aria-selected="false" aria-controls="stepShot" tabindex="-1" data-img="step-undo.png" data-alt="Every file back where it was after undo"><span class="n">4</span><span class="t">Undo, any time</span><span class="d">One click puts every file back, even after you restart Onyx.</span></button></li>
+        <li class="step"><button class="step-btn" role="tab" aria-selected="true" aria-controls="stepShot" data-i="0"><span class="n">Step 1</span><span class="t">Choose how to sort</span><span class="d">AI that reads names and your existing folders, offline rules, or simply by type, date or size.</span></button></li>
+        <li class="step"><button class="step-btn" role="tab" aria-selected="false" aria-controls="stepShot" tabindex="-1" data-i="1"><span class="n">Step 2</span><span class="t">Review the plan</span><span class="d">See the new folders or every single move, with the reason for each. Untick anything you disagree with.</span></button></li>
+        <li class="step"><button class="step-btn" role="tab" aria-selected="false" aria-controls="stepShot" tabindex="-1" data-i="2"><span class="n">Step 3</span><span class="t">Apply</span><span class="d">Only the moves you kept happen. If a name is taken, nothing is overwritten.</span></button></li>
+        <li class="step"><button class="step-btn" role="tab" aria-selected="false" aria-controls="stepShot" tabindex="-1" data-i="3"><span class="n">Step 4</span><span class="t">Undo, any time</span><span class="d">One click puts every file back, even after you restart Onyx.</span></button></li>
       </ol>
       <div class="step-shot">
-        <div class="shot" id="stepShot" role="tabpanel"><img src="overview.png" alt="Choosing how to sort a folder" width="1440" height="900"></div>
+        <div class="shot" id="stepShot" role="tabpanel" aria-live="polite">
+          <img class="layer on" src="overview.png" alt="Choosing how to sort a folder" width="1440" height="900">
+          <img class="layer" src="hero.png" alt="Reviewing the plan as a folder tree" width="1440" height="900">
+          <img class="layer" src="step-apply.png" alt="The folder after applying, with an Undo button" width="1280" height="760">
+          <img class="layer" src="step-undo.png" alt="Every file back where it was after undo" width="1280" height="760">
+        </div>
       </div>
     </div>
   </div>
@@ -274,24 +395,24 @@
 
 <section class="safe" aria-labelledby="safe-h">
   <div class="wrap">
-    <div class="sec-head">
+    <div class="sec-head" data-reveal>
       <h2 id="safe-h">Made for people who don't trust file organizers</h2>
       <p class="lede">Most organizers move first and never ask. Onyx was designed the other way round.</p>
     </div>
     <div class="promises">
-      <div class="promise"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg><div><h3>Planning never touches a file</h3><p>Make as many plans as you like. Nothing on disk changes until you press Apply.</p></div></div>
-      <div class="promise"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg><div><h3>Every apply can be undone</h3><p>Files you've edited since go back with your edits. Anything you moved yourself is skipped and listed, never guessed at.</p></div></div>
-      <div class="promise"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg><div><h3>Nothing is ever overwritten</h3><p>If a name is taken, the file becomes "report (2).pdf". Deleted files go to the Recycle Bin.</p></div></div>
-      <div class="promise"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg><div><h3>Projects stay in one piece</h3><p>Code projects, websites, games and 3D models with their textures are kept together, and folders you named yourself are left alone.</p></div></div>
-      <div class="promise"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg><div><h3>System folders are off limits</h3><p>Onyx won't reorganize a drive, Windows, Program Files or your whole user folder. You can still browse and search them.</p></div></div>
-      <div class="promise"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><div><h3>The AI only sees names</h3><p>File names, sizes and dates, never what's inside. Or run the AI on your own PC and nothing leaves it at all.</p></div></div>
+      <div class="promise" data-reveal style="--i:0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg><div><h3>Planning never touches a file</h3><p>Make as many plans as you like. Nothing on disk changes until you press Apply.</p></div></div>
+      <div class="promise" data-reveal style="--i:1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg><div><h3>Every apply can be undone</h3><p>Files you've edited since go back with your edits. Anything you moved yourself is skipped and listed, never guessed at.</p></div></div>
+      <div class="promise" data-reveal style="--i:2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg><div><h3>Nothing is ever overwritten</h3><p>If a name is taken, the file becomes "report (2).pdf". Deleted files go to the Recycle Bin.</p></div></div>
+      <div class="promise" data-reveal style="--i:3"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg><div><h3>Projects stay in one piece</h3><p>Code projects, websites, games and 3D models with their textures are kept together, and folders you named yourself are left alone.</p></div></div>
+      <div class="promise" data-reveal style="--i:4"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg><div><h3>System folders are off limits</h3><p>Onyx won't reorganize a drive, Windows, Program Files or your whole user folder. You can still browse and search them.</p></div></div>
+      <div class="promise" data-reveal style="--i:5"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><div><h3>The AI only sees names</h3><p>File names, sizes and dates, never what's inside. Or run the AI on your own PC and nothing leaves it at all.</p></div></div>
     </div>
   </div>
 </section>
 
 <section id="explorer">
   <div class="wrap split">
-    <div class="split-text">
+    <div class="split-text" data-reveal>
       <h2>Once it's tidy, it stays useful</h2>
       <p class="lede">Onyx doubles as a file explorer that understands what your files are about.</p>
       <ul class="feature-list">
@@ -301,15 +422,13 @@
         <li><b>The Explorer you already know</b><span>Rename, cut, copy, paste, drag and drop, Properties and the Windows right-click menu, with the same shortcuts.</span></li>
       </ul>
     </div>
-    <div class="shot"><img src="library.png" alt="The Library: files with tags and a preview" width="1440" height="900" loading="lazy"></div>
+    <div class="shot tilt"><img src="library.png" alt="The Library: files with tags and a preview" width="1440" height="900" loading="lazy"></div>
   </div>
 </section>
 
-<hr class="rule">
-
-<section id="ai">
+<section id="ai" style="padding-top:40px">
   <div class="wrap split flip">
-    <div class="split-text">
+    <div class="split-text" data-reveal>
       <h2>Use AI, or don't</h2>
       <p class="lede">Onyx works fully offline. AI makes the folder names smarter, and you choose where it runs.</p>
       <table class="ai-table">
@@ -321,30 +440,28 @@
         </tbody>
       </table>
     </div>
-    <div class="shot"><img src="ai-local.png" alt="Settings showing AI running on this PC with Ollama" width="980" height="612" loading="lazy"></div>
+    <div class="shot tilt"><img src="ai-local.png" alt="Settings showing AI running on this PC with Ollama" width="980" height="612" loading="lazy"></div>
   </div>
 </section>
 
-<hr class="rule">
-
 <section id="faq">
   <div class="wrap">
-    <div class="sec-head"><h2>Questions</h2></div>
-    <div class="faq">
-      <details><summary>Is it really free?</summary><p>Yes, for personal use. You can download it, run it and tweak your own copy. Using it inside a business or redistributing it needs permission.</p></details>
-      <details><summary>Windows says it "protected your PC". Is that normal?</summary><p>Yes. Onyx isn't signed with a paid code-signing certificate yet, so Windows warns about it like any new app. Click More info, then Run anyway. The full source code is public on GitHub if you'd like to look first.</p></details>
-      <details><summary>What if I don't like the result?</summary><p>Press Undo and every file goes back where it was. Files you've changed since keep your changes, and nothing is ever overwritten.</p></details>
-      <details><summary>What does the AI see?</summary><p>File names, sizes and dates, never what's inside your files. With AI on your PC, nothing leaves your computer at all, and the offline rules send nothing anywhere.</p></details>
-      <details><summary>Does it work with Obsidian?</summary><p>It isn't a plugin, but it was built in the same spirit: a graph view, tags, a command palette, docked panels and themes you can rebuild. It sits comfortably next to a vault, for the files around it.</p></details>
-      <details><summary>Can I try it without touching my files?</summary><p>Yes. On the start screen, choose Try the demo: a messy folder that only exists in memory.</p></details>
+    <div class="sec-head" data-reveal><h2>Questions</h2></div>
+    <div class="faq" data-reveal>
+      <details><summary>Is it really free?<span class="pm" aria-hidden="true"></span></summary><div class="ans"><p>Yes, for personal use. You can download it, run it and tweak your own copy. Using it inside a business or redistributing it needs permission.</p></div></details>
+      <details><summary>Windows says it "protected your PC". Is that normal?<span class="pm" aria-hidden="true"></span></summary><div class="ans"><p>Yes. Onyx isn't signed with a paid code-signing certificate yet, so Windows warns about it like any new app. Click More info, then Run anyway. The full source code is public on GitHub if you'd like to look first.</p></div></details>
+      <details><summary>What if I don't like the result?<span class="pm" aria-hidden="true"></span></summary><div class="ans"><p>Press Undo and every file goes back where it was. Files you've changed since keep your changes, and nothing is ever overwritten.</p></div></details>
+      <details><summary>What does the AI see?<span class="pm" aria-hidden="true"></span></summary><div class="ans"><p>File names, sizes and dates, never what's inside your files. With AI on your PC, nothing leaves your computer at all, and the offline rules send nothing anywhere.</p></div></details>
+      <details><summary>Does it work with Obsidian?<span class="pm" aria-hidden="true"></span></summary><div class="ans"><p>It isn't a plugin, but it was built in the same spirit: a graph view, tags, a command palette, docked panels and themes you can rebuild. It sits comfortably next to a vault, for the files around it.</p></div></details>
+      <details><summary>Can I try it without touching my files?<span class="pm" aria-hidden="true"></span></summary><div class="ans"><p>Yes. On the start screen, choose Try the demo: a messy folder that only exists in memory.</p></div></details>
     </div>
   </div>
 </section>
 
 <section class="closing">
   <div class="wrap">
-    <div class="closing-box">
-      <img src="icon.png" alt="">
+    <div class="closing-box" data-reveal>
+      <img class="stone" src="icon.png" alt="">
       <div><h2>Give your Downloads folder a fresh start</h2><p>Unzip it, open Onyx.exe and pick a folder. It takes a minute.</p></div>
       <div class="closing-ctas">
         <a class="btn btn-primary" href="https://github.com/Barbaqueda/onyx/releases/latest">Download for Windows</a>
@@ -366,7 +483,19 @@
 <script>
 (function () {
   'use strict';
-  // ---------------------------------------------------------------- the live demo
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const $ = s => document.querySelector(s);
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+
+  // ---------------------------------------------------------------- page-load sequence
+  requestAnimationFrame(() => requestAnimationFrame(() => document.body.classList.add('ready')));
+
+  // ---------------------------------------------------------------- glassy header once you scroll
+  const top = $('#top'), navCta = top.querySelector('.nav-cta');
+  const onScroll = () => { const s = scrollY > 24; top.classList.toggle('scrolled', s); navCta.tabIndex = s ? 0 : -1; };
+  addEventListener('scroll', onScroll, { passive: true }); onScroll();
+
+  // ---------------------------------------------------------------- the demo
   const ICON = {
     img: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/>',
     doc: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/>',
@@ -386,41 +515,40 @@
     ['boarding_pass.pdf', 'doc', 'Travel'], ['essay_final_v3.docx', 'doc', 'School'],
   ];
   const ORDER = ['Finance', 'Photos', 'Work', 'Installers', 'Music', 'School', '3D Models', 'Travel'];
-  const stage = document.getElementById('stage'), pile = document.getElementById('pile'), groups = document.getElementById('groups');
-  const go = document.getElementById('go'), discard = document.getElementById('discard'), msg = document.getElementById('msg'), count = document.getElementById('count');
-  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
-  const els = FILES.map(([name, icon, dest]) => {
+  const win = $('#window'), stage = $('#stage'), pile = $('#pile'), groups = $('#groups');
+  const go = $('#go'), discard = $('#discard'), msg = $('#msg'), count = $('#count'), ghost = $('#ghost'), note = $('#note');
+  const els = FILES.map(([name, icon, dest], i) => {
     const b = document.createElement('button');
     b.type = 'button'; b.className = 'file'; b.tabIndex = -1;
-    b.dataset.dest = dest;
-    b.style.setProperty('--tilt', (((name.length * 37) % 9) - 4) * 0.35 + 'deg');   // a slightly scattered pile
+    b.dataset.dest = dest; b.dataset.name = name;
+    b.style.setProperty('--tilt', (((name.length * 37) % 9) - 4) * 0.45 + 'deg');
+    b.style.setProperty('--td', (i * 0.035) + 's');
     b.innerHTML = svg(icon) + '<span class="fname">' + name + '</span><span class="to">to ' + dest + '</span>';
-    b.addEventListener('click', () => {
-      if (stage.dataset.state !== 'plan') return;
-      const kept = b.classList.toggle('kept');
-      b.setAttribute('aria-pressed', kept);
-      b.setAttribute('aria-label', name + (kept ? ', kept where it is' : ', moves to ' + dest));
-      update();
-    });
+    b.addEventListener('click', () => { if (stage.dataset.state === 'plan') toggleKeep(b); });
     return b;
   });
   els.forEach(e => pile.appendChild(e));
 
-  // move files between layouts with a FLIP animation, so you can watch each one travel to its folder
   function flip(change) {
     const first = new Map(els.map(e => [e, e.getBoundingClientRect()]));
     change();
-    if (reduce.matches || !Element.prototype.animate) return;
+    if (reduce || !Element.prototype.animate) return;
     els.forEach((e, i) => {
       const a = first.get(e), b = e.getBoundingClientRect();
       const dx = a.left - b.left, dy = a.top - b.top;
       if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
-      e.animate([{ transform: 'translate(' + dx + 'px,' + dy + 'px)' }, { transform: 'none' }],
-        { duration: 640, delay: i * 24, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'backwards' });
+      e.animate([{ transform: 'translate(' + dx + 'px,' + dy + 'px) scale(.96)' }, { transform: 'translate(' + dx * .1 + 'px,' + dy * .1 + 'px) scale(1.02)', offset: .8 }, { transform: 'none' }],
+        { duration: 760, delay: i * 26, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'backwards' });
     });
   }
   const moving = () => els.filter(e => !e.classList.contains('kept'));
   const kept = () => els.filter(e => e.classList.contains('kept'));
+  function toggleKeep(b) {
+    const k = b.classList.toggle('kept');
+    b.setAttribute('aria-pressed', k);
+    b.setAttribute('aria-label', b.dataset.name + (k ? ', kept where it is' : ', moves to ' + b.dataset.dest));
+    update();
+  }
   function update() {
     const s = stage.dataset.state, n = moving().length;
     discard.hidden = s !== 'plan';
@@ -436,17 +564,17 @@
   }
   function toPlan() {
     stage.dataset.state = 'plan';
-    els.forEach(e => { e.tabIndex = 0; e.setAttribute('aria-pressed', 'false'); e.setAttribute('aria-label', e.querySelector('.fname').textContent + ', moves to ' + e.dataset.dest); });
+    els.forEach(e => { e.tabIndex = 0; e.setAttribute('aria-pressed', 'false'); e.setAttribute('aria-label', e.dataset.name + ', moves to ' + e.dataset.dest); });
     update();
   }
   function group(title, files, muted) {
     const g = document.createElement('div');
+    g.className = 'group-new';
     g.innerHTML = '<div class="group-name"' + (muted ? ' style="color:var(--on-onyx-soft)"' : '') + '>' + (muted ? '' : svg('folder')) + title + '<em>' + files.length + '</em></div><div class="group-files"></div>';
     files.forEach(f => g.lastChild.appendChild(f));
     groups.appendChild(g);
   }
   function apply() {
-    const n = moving().length;
     flip(() => {
       groups.innerHTML = '';
       for (const name of ORDER) { const files = moving().filter(e => e.dataset.dest === name); if (files.length) group(name, files); }
@@ -457,7 +585,6 @@
     });
     count.textContent = new Set(moving().map(e => e.dataset.dest)).size + ' folders';
     update();
-    go.focus();
   }
   function undo() {
     flip(() => {
@@ -468,30 +595,121 @@
     update();
     msg.innerHTML = '<span class="ok">Every file is back where it was.</span>';
   }
-  go.addEventListener('click', () => {
-    const s = stage.dataset.state;
-    if (s === 'messy') toPlan(); else if (s === 'plan') apply(); else undo();
-  });
-  discard.addEventListener('click', () => {
+  function step() { const s = stage.dataset.state; if (s === 'messy') toPlan(); else if (s === 'plan') apply(); else undo(); }
+  function reset() {
     els.forEach(e => { e.classList.remove('kept'); e.tabIndex = -1; e.removeAttribute('aria-pressed'); e.removeAttribute('aria-label'); });
+    if (stage.dataset.state === 'applied') { els.forEach(e => pile.appendChild(e)); groups.hidden = true; pile.hidden = false; groups.innerHTML = ''; }
     stage.dataset.state = 'messy'; update();
-    msg.textContent = 'Plan discarded. Nothing moved.';
-  });
+  }
 
-  // ---------------------------------------------------------------- how it works: tabs
-  const tabs = [...document.querySelectorAll('#stepList .step-btn')];
-  const shot = document.querySelector('#stepShot img');
-  tabs.forEach(t => { new Image().src = t.dataset.img; });
-  function select(t, focus) {
-    tabs.forEach(x => { const on = x === t; x.setAttribute('aria-selected', on); x.tabIndex = on ? 0 : -1; });
-    shot.src = t.dataset.img; shot.alt = t.dataset.alt;
-    if (focus) t.focus();
+  // the demo plays itself until you touch it
+  let auto = !reduce, run = 0;
+  function takeOver() {
+    if (!auto) return;
+    auto = false; run++;
+    ghost.classList.remove('on'); note.classList.add('gone'); win.classList.remove('autoplaying');
+    reset(); msg.textContent = 'Your turn. Make a plan.';
+  }
+  async function moveGhost(el, ox, oy) {
+    const w = win.getBoundingClientRect(), r = el.getBoundingClientRect();
+    ghost.style.transform = 'translate(' + (r.left - w.left + r.width * (ox || .5)) + 'px,' + (r.top - w.top + r.height * (oy || .55)) + 'px)';
+    await wait(950);
+  }
+  async function press(el) { ghost.classList.add('click'); el.classList.add('pressed'); await wait(180); el.classList.remove('pressed'); await wait(260); ghost.classList.remove('click'); }
+  async function demo() {
+    const id = ++run;
+    const alive = () => auto && id === run;
+    await wait(1700); if (!alive()) return;
+    ghost.style.transform = 'translate(' + (win.clientWidth * .55) + 'px,' + (win.clientHeight * .7) + 'px)';
+    ghost.classList.add('on');
+    while (alive()) {
+      msg.textContent = 'A messy Downloads folder.';
+      await wait(700); if (!alive()) return;
+      await moveGhost(go); if (!alive()) return;
+      await press(go); if (!alive()) return; toPlan();
+      await wait(1500); if (!alive()) return;
+      const pick = els[3];
+      await moveGhost(pick, .3); if (!alive()) return;
+      await press(pick); if (!alive()) return; toggleKeep(pick);
+      await wait(900); if (!alive()) return;
+      await moveGhost(go); if (!alive()) return;
+      await press(go); if (!alive()) return; apply();
+      await wait(2600); if (!alive()) return;
+      await press(go); if (!alive()) return; undo();
+      await wait(2200);
+    }
+  }
+  ['pointerdown', 'keydown'].forEach(ev => win.addEventListener(ev, takeOver, { capture: true }));
+  go.addEventListener('click', () => { if (!auto) step(); });
+  discard.addEventListener('click', () => { if (auto) return; reset(); msg.textContent = 'Plan discarded. Nothing moved.'; });
+  if (auto) {
+    win.classList.add('autoplaying');
+    // only run while the demo is on screen
+    new IntersectionObserver(es => es.forEach(e => { if (!auto) return; if (e.isIntersecting) demo(); else { run++; ghost.classList.remove('on'); reset(); } }), { threshold: .35 }).observe(win);
+  } else { note.classList.add('gone'); msg.textContent = 'A messy Downloads folder. Try organizing it.'; }
+
+  // light that follows the pointer around the window
+  win.addEventListener('pointermove', e => { const r = win.getBoundingClientRect(); win.style.setProperty('--mx', (e.clientX - r.left) + 'px'); win.style.setProperty('--my', (e.clientY - r.top) + 'px'); });
+
+  // ---------------------------------------------------------------- the ribbon of messy file names
+  const RIB = [['Screenshot (412).png', '#8f9cf9'], ['final_FINAL_v2.docx', '#d2a96c'], ['IMG_20240613_181522.jpg', '#86b8a0'], ['setup(3).exe', '#c99aa8'], ['New folder (7)', '#a9a3c6'], ['receipt_amazon.pdf', '#d2a96c'], ['untitled.txt', '#b7bac4'], ['Zoom_meeting.mp4', '#79b4b2'], ['resume_2026_new.pdf', '#8aa3c9'], ['beat idea 4.wav', '#c48770'], ['tax stuff', '#a0b97f'], ['Document (2).docx', '#8aa3c9'], ['wallpaper.png', '#86b8a0'], ['download.zip', '#c8bb93'], ['notes old.md', '#b7bac4'], ['invoice-0042.pdf', '#d2a96c']];
+  const chips = list => list.map(([t, c]) => '<span class="chip" style="--c:' + c + '"><i></i>' + t + '</span>').join('');
+  const half = RIB.slice(0, 8), other = RIB.slice(8);
+  $('#row1').innerHTML = chips(RIB) + chips(RIB);
+  $('#row2').innerHTML = chips(other.concat(half)) + chips(other.concat(half));
+
+  // ---------------------------------------------------------------- reveals as you scroll
+  const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('seen'); io.unobserve(e.target); } }), { threshold: .18, rootMargin: '0px 0px -8% 0px' });
+  document.querySelectorAll('[data-reveal]').forEach(el => io.observe(el));
+
+  // ---------------------------------------------------------------- how it works: steps follow your scroll
+  const tabs = [...document.querySelectorAll('.step-btn')], layers = [...document.querySelectorAll('#stepShot .layer')], progress = $('#stepList');
+  let current = 0;
+  function select(i, focus) {
+    if (i === current && !focus) return;
+    current = i;
+    tabs.forEach((t, k) => { t.setAttribute('aria-selected', k === i); t.tabIndex = k === i ? 0 : -1; });
+    layers.forEach((l, k) => l.classList.toggle('on', k === i));
+    progress.style.setProperty('--p', tabs.length > 1 ? i / (tabs.length - 1) : 1);
+    if (focus) tabs[i].focus();
   }
   tabs.forEach((t, i) => {
-    t.addEventListener('click', () => select(t));
+    t.addEventListener('click', () => { select(i, true); if (innerWidth > 960) t.closest('.step').scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'center' }); });
     t.addEventListener('keydown', e => {
       const d = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
-      if (d) { e.preventDefault(); select(tabs[(i + d + tabs.length) % tabs.length], true); }
+      if (d) { e.preventDefault(); select((i + d + tabs.length) % tabs.length, true); }
+    });
+  });
+  const stepIo = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) select(+e.target.querySelector('.step-btn').dataset.i); }), { rootMargin: '-45% 0px -45% 0px' });
+  document.querySelectorAll('.step').forEach(s => stepIo.observe(s));
+
+  // ---------------------------------------------------------------- screenshots tilt flat as they arrive
+  const tilts = [...document.querySelectorAll('.tilt')];
+  let ticking = false;
+  function tilt() {
+    ticking = false;
+    const h = innerHeight;
+    tilts.forEach(el => {
+      const r = el.getBoundingClientRect();
+      const t = Math.min(1, Math.max(0, (r.top - h * .35) / (h * .65)));
+      el.style.setProperty('--t', t.toFixed(3));
+    });
+  }
+  if (!reduce) { addEventListener('scroll', () => { if (!ticking) { ticking = true; requestAnimationFrame(tilt); } }, { passive: true }); tilt(); }
+
+  // ---------------------------------------------------------------- questions open smoothly
+  document.querySelectorAll('.faq details').forEach(d => {
+    const s = d.querySelector('summary'), a = d.querySelector('.ans');
+    s.addEventListener('click', e => {
+      if (reduce || !a.animate) return;
+      e.preventDefault();
+      if (d.open) {
+        a.animate([{ height: a.offsetHeight + 'px', opacity: 1 }, { height: '0px', opacity: 0 }], { duration: 320, easing: 'cubic-bezier(.16,1,.3,1)' }).onfinish = () => { d.open = false; };
+      } else {
+        d.open = true;
+        const h = a.offsetHeight;
+        a.animate([{ height: '0px', opacity: 0 }, { height: h + 'px', opacity: 1 }], { duration: 420, easing: 'cubic-bezier(.16,1,.3,1)' });
+      }
     });
   });
 
@@ -501,7 +719,7 @@
     const zip = r.assets.find(a => /\.zip$/i.test(a.name));
     const mb = zip ? Math.round(zip.size / 1048576) : 0;
     const v = ((r.name || r.tag_name || '').match(/\d+(\.\d+)+/) || [''])[0];
-    document.getElementById('version').textContent = (v ? 'Version ' + v + (mb ? ', ' + mb + ' MB. ' : '. ') : '') + 'Free for personal use, for Windows 10 and 11.';
+    $('#version').textContent = (v ? 'Version ' + v + (mb ? ', ' + mb + ' MB. ' : '. ') : '') + 'Free for personal use, for Windows 10 and 11.';
     if (zip) document.querySelectorAll('a[href$="/releases/latest"]').forEach(a => { a.href = zip.browser_download_url; });
   }).catch(() => {});
 })();
