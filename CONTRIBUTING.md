@@ -1,6 +1,6 @@
 # Contributing to Onyx
 
-Thanks for wanting to help. Onyx is proprietary (see [LICENSE](LICENSE)), so the ways to contribute are a little different from an open-source project.
+Thanks for wanting to help. Onyx is free for personal use but isn't open source (see [LICENSE](LICENSE)), so the ways to contribute are a little different.
 
 ## Report a bug
 
@@ -22,7 +22,7 @@ Onyx can be extended with viewers for new file types without touching its code. 
 
 ## Code changes
 
-Pull requests can't be merged without a written agreement first, because the license doesn't allow changes to Onyx without permission. If you'd like to work on something, open an issue describing it and ask; if it's a good fit, we'll sort out the details before you start.
+Pull requests can't be merged without a written agreement first, because changes to Onyx itself need a separate agreement. If you'd like to work on something, open an issue describing it and ask; if it's a good fit, we'll sort out the details before you start.
 
 ## Security issues
 

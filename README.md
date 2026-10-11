@@ -7,7 +7,7 @@
   <img alt="Electron 32" src="https://img.shields.io/badge/Electron-32-1a1a1d?style=for-the-badge&logo=electron&logoColor=c9ccd5">
   <img alt="Works offline" src="https://img.shields.io/badge/works-offline-1a1a1d?style=for-the-badge&logoColor=c9ccd5">
   <img alt="Undo everything" src="https://img.shields.io/badge/undo-every%20move-1a1a1d?style=for-the-badge">
-  <a href="LICENSE"><img alt="License: all rights reserved" src="https://img.shields.io/badge/license-all%20rights%20reserved-1a1a1d?style=for-the-badge"></a>
+  <a href="LICENSE"><img alt="License: free for personal use" src="https://img.shields.io/badge/license-free%20for%20personal%20use-1a1a1d?style=for-the-badge"></a>
 </p>
 
 <p align="center">
@@ -37,8 +37,8 @@ Once things are tidy, Onyx stays useful as **a better file explorer**: every fil
 
 ## ⬇ Get it
 
-> [!IMPORTANT]
-> Onyx is proprietary software. The code is public so you can see it, but building, running, copying or redistributing it needs written permission. See [License](#-license).
+> [!NOTE]
+> Onyx is free for personal use. Commercial use and redistribution need permission. See [License](#-license).
 
 > [!TIP]
 > No installer and no admin rights.
@@ -405,9 +405,9 @@ onyx/
 
 ## ⚖ License
 
-**Copyright © 2026 Alexander Dunn. All rights reserved.**
+**Copyright © 2026 Alexander Dunn.**
 
-Onyx is proprietary. You're welcome to read the code here on GitHub, but no license is granted: copying, modifying, building, running, redistributing or selling it, in whole or in part, needs prior written permission. Forking on GitHub doesn't grant any of those rights. The full terms are in [`LICENSE`](LICENSE). For permission or licensing enquiries, get in touch via [@Barbaqueda](https://github.com/Barbaqueda).
+Onyx is **free for personal use**: download it, build it, run it and tweak your own copy, and write and share extensions for it. Using it in a business, redistributing it or reselling it needs prior written permission. The full terms are in [`LICENSE`](LICENSE). For permission or licensing enquiries, get in touch via [@Barbaqueda](https://github.com/Barbaqueda).
 
 <br>
 

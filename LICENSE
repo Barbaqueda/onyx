@@ -1,25 +1,37 @@
+Onyx Personal Use License
+
 Copyright (c) 2026 Alexander Dunn (github.com/Barbaqueda)
-All rights reserved.
+All rights reserved, except as granted below.
 
 Onyx, including its source code, build scripts, icons, images and
-documentation (the "Software"), is proprietary. No license is granted
-to anyone by making it visible in this repository.
+documentation (the "Software"), is owned by the copyright holder.
 
-You may view the Software on GitHub as GitHub's Terms of Service allow.
-Forking it on GitHub does not grant any further rights.
+1. Personal use. You may download, build, install and run the Software,
+   free of charge, for your own personal, non-commercial use on devices
+   you own or control. You may make changes to your own copy for that
+   purpose, and you may write and share extensions for the Software that
+   use its extension interface.
 
-Except with prior written permission from the copyright holder, you may
-not:
+2. What you may not do without prior written permission from the
+   copyright holder:
 
-  1. copy, modify, translate or create derivative works of the Software,
-     in whole or in part;
-  2. build, install, run or otherwise use the Software;
-  3. distribute, publish, sublicense, sell, rent, lease or lend the
-     Software or any derivative work;
-  4. remove or alter this notice or any copyright notice in the Software.
+   a. use the Software for commercial purposes, including inside a
+      business or to provide a paid service;
+   b. distribute, publish, sublicense, sell, rent or lend the Software,
+      a modified version of it, or any part of its source code, other
+      than linking to this repository or its official releases;
+   c. remove or alter this notice, the copyright notice, or the Onyx
+      name and icon in order to pass the Software off as your own.
 
-To ask for permission, contact the copyright holder through
-https://github.com/Barbaqueda.
+3. Forking this repository on GitHub is allowed so you can view, build
+   and run it as section 1 permits. It does not grant any further rights.
+
+4. Contributions. Changes you send to the copyright holder (for example
+   as a pull request) may be used in the Software only under a separate
+   written agreement.
+
+To ask for permission beyond this license, contact the copyright holder
+through https://github.com/Barbaqueda.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
