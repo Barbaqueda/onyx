@@ -216,6 +216,10 @@
 
       // about
       { s: 'about', k: 'x.about', name: '', desc: '', stack: true, noReset: true, c: () => '<div class="about-logo"><img src="icon.png" alt=""><div><div class="n">Onyx</div><div class="v">Version ' + esc(C.S.settings.version || '') + '</div></div></div>' +
+        '<div class="about-links"><a class="btn mod-cta" href="https://github.com/Barbaqueda/onyx" target="_blank" rel="noopener">' + C.icon('star') + 'Star Onyx on GitHub</a>' +
+        '<a class="btn" href="https://github.com/Barbaqueda/onyx/issues/new/choose" target="_blank" rel="noopener">' + C.icon('bug') + 'Report a bug or ask for a feature</a>' +
+        '<a class="btn" href="https://barbaqueda.github.io/onyx/" target="_blank" rel="noopener">' + C.icon('external-link') + 'Website</a></div>' +
+        '<p class="about-thanks">Onyx is free, made by one person. A star on GitHub is the easiest way to help other people find it.</p>' +
         '<p style="color:var(--text-muted);line-height:1.6">Onyx proposes a tidy folder structure for a messy folder and only moves files after you review the plan.</p>' +
         '<ul><li>Only loose files at the top level are moved; your folders stay put.</li><li>Every apply can be undone from the sidebar.</li><li>Your API key is encrypted with your Windows account.</li><li>Press ' + kbd('palette') + ' for every command, ' + kbd('toggle-mode') + ' to flip light and dark.</li></ul>' },
     ];

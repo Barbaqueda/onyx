@@ -462,6 +462,10 @@ mark.hl { background: rgba(var(--accent-rgb), .25); color: inherit; border-radiu
 .about-logo img { width: 56px; height: 56px; }
 .about-logo .n { font-size: 20px; font-weight: 700; }
 .about-logo .v { color: var(--text-faint); font-size: 13px; }
+.about-links { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.about-links .btn { text-decoration: none; }
+.about-links .btn svg { width: 14px; height: 14px; }
+.about-thanks { color: var(--text-faint); font-size: 12.5px; margin: 0 0 16px; }
 .settings-body ul { margin: 8px 0 0 18px; color: var(--text-muted); font-size: 13px; line-height: 1.7; }
 .test-result { font-size: 13px; max-width: 260px; text-align: right; }
 .test-result.ok { color: var(--green); } .test-result.err { color: var(--orange); }
